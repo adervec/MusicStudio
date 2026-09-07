@@ -97,6 +97,10 @@ export default function Settings({ apiKey, prefs, voices, backupName, publishNam
         <button className="mini" onClick={onImportData}>⟲ Restore…</button>
       </div>
       <p className="note">Downloads a JSON of your albums, groups, playlists, attachments and settings (not the audio — that's in your backup folder, recover with 🔎 Scan folder after restoring).</p>
+
+      <div className="section">Elsewhere</div>
+      <p className="note">More apps by the same maker, all free and local-first —{' '}
+        <a href="https://adervec.github.io/portal/" target="_blank" rel="noopener noreferrer">adervec.github.io</a></p>
     </Dialog>
   );
 }

@@ -15,6 +15,7 @@ import Export from './components/Export.jsx';
 import Metadata from './components/Metadata.jsx';
 import Attachments from './components/Attachments.jsx';
 import Import from './components/Import.jsx';
+import Cowork from './components/Cowork.jsx';
 import GroupView from './components/GroupView.jsx';
 import PlaylistView from './components/PlaylistView.jsx';
 import PastePrompts from './components/PastePrompts.jsx';
@@ -47,7 +48,7 @@ export default function App() {
   const [requests, setRequests] = useState(null); // sync request published by a phone
   const [cloudBusy, setCloudBusy] = useState('');
   const [showCloud, setShowCloud] = useState(false);
-  const [modal, setModal] = useState(null); // 'settings' | 'dashboard' | 'export' | 'metadata' | 'attachments'
+  const [modal, setModal] = useState(null); // 'settings' | 'dashboard' | 'export' | 'metadata' | 'attachments' | 'cowork'
   const [sidebarW, setSidebarW] = useState(240);
   const [watch, setWatch] = useState(true);        // auto-reload album.json on external edits
   const [justSynced, setJustSynced] = useState(false);
@@ -627,6 +628,7 @@ export default function App() {
         <button onClick={() => setModal('paste')} title="New album from a pasted block of song prompts (e.g. from a Claude chat)">📋 Paste prompts</button>
         <button onClick={() => setModal('import')} disabled={!dir} title="Scan the folder for groups/albums created on disk (e.g. by a Claude Code session)">⟳ Import</button>
         <button onClick={() => setWatch((w) => !w)} disabled={!dir} title="Auto-reload album.json when an external editor (e.g. a Claude Code session) changes it">{watch ? '👁 Watching' : '👁 Watch off'}</button>
+        <button onClick={() => setModal('cowork')} title="Hand your albums and prompts to an AI agent through a folder, and read its notes back">🤝 Cowork</button>
         <button onClick={() => { setShowCloud((v) => !v); if (!drive) connectDrive(); }} className={showCloud ? 'primary' : ''} title="Browse the desktop library published to Google Drive and choose what syncs to your phone">☁ Cloud{requests && pubDir && requestsPending(requests, 0) ? ' •' : ''}</button>
         <button onClick={() => setModal('sync')} disabled={!pubDir} title={pubDir ? `Choose which albums are synced to ${pubDir.name} (your device folder)` : 'Set a publish folder in Settings first'}>📱 Sync</button>
         <button onClick={() => setModal('dashboard')}>💲 Spend</button>
@@ -674,6 +676,7 @@ export default function App() {
           onPushCatalog={async () => { setCloudBusy('Pushing…'); try { const c = await pushCatalog(); showToast(`☁ Published ${c.albums.length} albums to Drive`); } catch (e) { showToast('Push failed: ' + (e.message || e)); } setCloudBusy(''); }} />
       )}
       {modal === 'dashboard' && <Dashboard onClose={() => setModal(null)} />}
+      {modal === 'cowork' && <Cowork projects={projects} groups={groups} onClose={() => setModal(null)} />}
       {modal === 'paste' && <PastePrompts onClose={() => setModal(null)} onCreate={createFromPrompts} />}
       {modal === 'sync' && pubDir && <DeviceSync projects={projects} groups={groups} syncMap={syncMap} deviceName={pubDir.name} busy={syncBusy} onApply={applySync} onClose={() => setModal(null)} />}
       {modal === 'export' && active && <Export project={active} backupDir={dir} backupName={dir?.name} albumDir={albumPath(active)} gapMs={prefs.gapMs} onClose={() => setModal(null)} />}

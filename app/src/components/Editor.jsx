@@ -72,6 +72,13 @@ export default function Editor({ project, apiKey, prefs, voices, backupReady, gr
       const file = await backupClip(ready, blob);
       if (file) patch(t.id, { backupFile: file });
       writeSkeleton?.();
+      // The maker's app portal keeps a character sheet from what its apps report. Writing and
+      // generating a track is a few minutes of creative work; amount is in units of ten minutes.
+      try {
+        const k = 'portal-activity', a = JSON.parse(localStorage.getItem(k) || '[]');
+        a.push([Math.round(Date.now() / 1000), 'MusicStudio', 'compose', 1]);
+        localStorage.setItem(k, JSON.stringify(a.slice(-2000)));
+      } catch { /* quota — ignore */ }
       return { clipId, durationMs, sizeBytes: blob.size, mime: blob.type };
     } catch (e) { patch(t.id, { status: 'error', error: e.message || String(e) }); return null; }
   }
