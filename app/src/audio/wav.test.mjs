@@ -269,4 +269,56 @@ import { bufToB64, b64ToBuf } from '../state/db.js';
   assert.deepEqual(parsePromptBlob('  \n\n'), [], 'blank input → no tracks');
 }
 
-console.log('ok — wav/pricing/skeleton/path/import/edits/gaps/playlists/backup/paste/sync/catalog self-check passed');
+// Library table + wizards: rows/filter/stats, rearrange planning (cycles, clashes, new groups), pairing.
+{
+  const L = await import('../album/library.js');
+  let n = 0; const mk = () => `g${++n}`;
+  const groups = [{ id: 'a', name: 'Synth', parentId: null }, { id: 'b', name: 'Cycle 1', parentId: 'a' }, { id: 'c', name: 'Orchestral', parentId: null }];
+  const projects = [
+    { id: 'p1', title: 'Neon', parentId: 'b', meta: { genre: 'Darksynth', year: 2026 }, tracks: [
+      { id: 't1', type: 'music', title: 'Rain', prompt: 'heavy arps', clipId: 'c1', durationMs: 60000, fav: true },
+      { id: 't2', type: 'music', title: 'Steel', prompt: 'drone', lengthMs: 120000 }] },
+    { id: 'p2', title: 'Hymns', parentId: 'c', meta: {}, tracks: [{ id: 't3', type: 'upload', title: 'Bells', clipId: 'c3', durationMs: 30000 }] },
+  ];
+  const rows = L.libraryRows(projects, groups);
+  assert.equal(rows.length, 3);
+  assert.equal(rows[0].group, 'Synth/Cycle 1');
+  assert.deepEqual(L.filterRows(rows, { group: 'Synth' }).map((r) => r.id), ['t1', 't2'], 'group filter covers its subtree');
+  assert.deepEqual(L.filterRows(rows, { q: 'darksynth arps' }).map((r) => r.id), ['t1'], 'every word must match');
+  assert.deepEqual(L.filterRows(rows, { status: 'gap' }).map((r) => r.id), ['t2']);
+  assert.deepEqual(L.filterRows(rows, { fav: true }).map((r) => r.id), ['t1']);
+  assert.deepEqual(L.sortRows(rows, 'ms', -1).map((r) => r.id), ['t1', 't3', 't2']);
+  const s = L.libraryStats(rows);
+  assert.deepEqual([s.albums, s.tracks, s.ready, s.gaps, s.ms, s.favs], [2, 3, 2, 1, 90000, 1]);
+  assert.ok(Math.abs(s.gapCost - musicCost(120000)) < 1e-9, 'gap cost uses the planned length');
+  assert.equal(L.breakdown(rows, (r) => r.group.split('/')[0])[0].k, 'Synth');
+  assert.equal(L.toCsv([{ a: 'x,"y"', b: 1 }], ['a', 'b']), 'a,b\n"x,""y""",1');
+
+  // Rearrange: new nested path is created once; a group can't go inside itself; same-name lands are blocked; no-ops drop.
+  const plan = L.planRearrange([
+    { kind: 'album', id: 'p1', dest: 'Archive/2026' },
+    { kind: 'album', id: 'p2', dest: 'Archive/2026' },
+    { kind: 'group', id: 'a', dest: 'Synth/Cycle 1' },
+  ], groups, projects, mk);
+  assert.deepEqual(plan.created.map((g) => g.name), ['Archive', '2026']);
+  assert.deepEqual(plan.moves.map((m) => [m.id, m.from, m.to]), [['p1', 'Synth/Cycle 1/Neon', 'Archive/2026/Neon'], ['p2', 'Orchestral/Hymns', 'Archive/2026/Hymns']]);
+  assert.deepEqual(plan.blocked, [{ id: 'a', why: 'into itself' }]);
+  const clash = L.planRearrange([{ kind: 'album', id: 'p2', dest: 'Synth/Cycle 1' }], groups, [...projects, { id: 'p3', title: 'Hymns', parentId: 'b' }], mk);
+  assert.deepEqual(clash.blocked, [{ id: 'p2', why: 'name taken there' }]);
+  assert.equal(clash.created.length, 0);
+  assert.equal(L.planRearrange([{ kind: 'album', id: 'p1', dest: 'Synth/Cycle 1' }], groups, projects, mk).moves.length, 0, 'already there → no-op');
+  assert.equal(L.albumField(projects[0], 'genre'), 'Darksynth');
+
+  // Pairing: track numbers / app suffix / punctuation ignored; containment as fallback; leftovers both ways.
+  assert.equal(L.normTitle('03 - Neon Rain_k3x9a.wav'), 'neon rain');
+  assert.equal(L.normTitle('Mr.Big'), 'mr big', 'a dotted title is not an extension');
+  assert.equal(L.fileTitle('song_intro.mp3'), 'song_intro', 'a real suffix survives');
+  const files = [{ name: '02 Steel Sky.wav' }, { name: '01 Neon Rain_k3x9a.mp3' }, { name: 'Outro.flac' }];
+  const pairs = L.pairItems([{ title: 'Neon Rain!', prompt: 'p1' }, { title: 'Steel', prompt: 'p2' }, { title: 'Ghost', prompt: 'p3' }], files);
+  assert.deepEqual(pairs.map((r) => [r.title, r.prompt, r.file?.name || null]), [
+    ['Neon Rain!', 'p1', '01 Neon Rain_k3x9a.mp3'], ['Steel', 'p2', '02 Steel Sky.wav'], ['Ghost', 'p3', null], ['Outro', '', 'Outro.flac']]);
+  assert.deepEqual(L.promptsFromText('Neon Rain.txt', 'darksynth, 120 BPM', parsePromptBlob), [{ title: 'Neon Rain', prompt: 'darksynth, 120 BPM' }], 'one-prompt file is titled by its name');
+  assert.equal(L.promptsFromText('list.md', '1. A — x\n2. B — y', parsePromptBlob).length, 2);
+}
+
+console.log('ok — wav/pricing/skeleton/path/import/edits/gaps/playlists/backup/paste/sync/catalog/library self-check passed');

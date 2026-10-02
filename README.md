@@ -21,6 +21,7 @@ is stored on-device and sent only to ElevenLabs.
   folder restores everything, audio included.
 - **Agent workflow** — the backup folder holds an `AGENT.md` and one `album.json` per album, so a
   separate Claude Code session can design albums (tracks, prompts, metadata) that the app live-reloads.
+- **📊 Library table** — every song sortable/filterable in one table with stats; **🧩 Build album** pairs loose prompts and audio files into an album; **🗂 Reorganize** bulk-moves or auto-sorts the group tree.
 - **Device sync + phone remote** — see below.
 - **Spend dashboard** — estimated cost per day / model / call, monthly budget, CSV export, live credits.
 

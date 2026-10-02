@@ -112,3 +112,15 @@ table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); }
 .log { max-height: 220px; overflow: auto; font-size: 12px; }
 .log-row { display: grid; grid-template-columns: 130px 1fr 90px 60px; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--line); }
+
+/* Library table + wizards */
+.lib-filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.lib-filters select, .lib-filters input { flex: 1; min-width: 120px; }
+.lib-breakdowns { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin: 10px 0 12px; }
+.lib-table { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+.lib-table thead th { position: sticky; top: 0; background: var(--panel); user-select: none; }
+.lib-table tbody tr:hover, .lib-table tr.playing { background: var(--panel2); }
+.lib-table a { color: var(--accent); text-decoration: none; }
+.lib-prompt { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); }
+.wiz-list { overflow-y: auto; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+.wiz-list td, .wiz-list th { vertical-align: top; padding: 4px; }

@@ -2,15 +2,14 @@ import { usePlayer } from './usePlayer.js';
 import Transport from './Transport.jsx';
 import { fmtDuration } from '../state/pricing.js';
 import { isGap } from '../album/skeleton.js';
+import { descendantIds } from '../album/library.js';
 
 // Read-only overview of a group: every album under it (recursively) with its songs, and a Play-all
 // across the whole group. No editing — click an album to open it in the editor.
 export default function GroupView({ group, groups, projects, onOpenAlbum, onCopyPath }) {
   const player = usePlayer();
 
-  const ids = new Set([group.id]);
-  let added = true;
-  while (added) { added = false; for (const g of groups) if (g.parentId && ids.has(g.parentId) && !ids.has(g.id)) { ids.add(g.id); added = true; } }
+  const ids = descendantIds(group.id, groups);
   const albums = projects.filter((p) => ids.has(p.parentId));
   const allReady = albums.flatMap((a) => (a.tracks || []).filter((t) => t.clipId));
   const totalMs = allReady.reduce((s, t) => s + (t.durationMs || 0), 0);

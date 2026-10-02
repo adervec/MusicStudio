@@ -38,9 +38,10 @@ export async function getProject(id) {
   const db = await getDB();
   return (await db.get('projects', id)) || null;
 }
-export async function saveProject(project) {
+// `keepTime` for moves: a new folder isn't new content, so device sync shouldn't republish it.
+export async function saveProject(project, { keepTime = false } = {}) {
   const db = await getDB();
-  const rec = { ...project, updatedAt: Date.now() };
+  const rec = { ...project, updatedAt: keepTime && project.updatedAt ? project.updatedAt : Date.now() };
   await db.put('projects', rec);
   return rec;
 }

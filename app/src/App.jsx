@@ -18,7 +18,10 @@ import Import from './components/Import.jsx';
 import Cowork from './components/Cowork.jsx';
 import GroupView from './components/GroupView.jsx';
 import PlaylistView from './components/PlaylistView.jsx';
-import PastePrompts from './components/PastePrompts.jsx';
+import BuildAlbum from './components/BuildAlbum.jsx';
+import Reorganize from './components/Reorganize.jsx';
+import Library from './components/Library.jsx';
+import { ensureGroupPath } from './album/library.js';
 import DeviceSync from './components/DeviceSync.jsx';
 import CloudLibrary from './components/CloudLibrary.jsx';
 import { driveConnect, driveDisconnect, driveConnected, driveProfile, driveUploadJson, driveDownloadJson, driveStat, driveClientId, CATALOG_FILE, REQUEST_FILE } from './cloud/drive.js';
@@ -48,6 +51,8 @@ export default function App() {
   const [requests, setRequests] = useState(null); // sync request published by a phone
   const [cloudBusy, setCloudBusy] = useState('');
   const [showCloud, setShowCloud] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [wizBusy, setWizBusy] = useState('');
   const [modal, setModal] = useState(null); // 'settings' | 'dashboard' | 'export' | 'metadata' | 'attachments' | 'cowork'
   const [sidebarW, setSidebarW] = useState(240);
   const [watch, setWatch] = useState(true);        // auto-reload album.json on external edits
@@ -389,7 +394,7 @@ export default function App() {
       if (!p) return;
       const oldPath = albumFolderPath(p, groups);
       const next = { ...p, parentId };
-      await saveProject(next); await refreshProjects();
+      await saveProject(next, { keepTime: true }); await refreshProjects();
       if (activeRef.current?.id === id) { activeRef.current = next; setActive(next); }
       fsOp((d) => moveDir(d, oldPath, albumFolderPath(next, groups)));
     }
@@ -587,16 +592,90 @@ export default function App() {
     } catch (e) { setCloudBusy(''); showToast('Save failed: ' + (e.message || e)); }
   }
 
-  // New album from a pasted block of prompts (e.g. written in a Claude chat).
-  async function createFromPrompts(title, items) {
-    const p = await saveProject({
-      id: uid('p_'), title: title || 'Pasted album', artist: '', description: '', meta: {}, parentId: null, createdAt: Date.now(),
-      tracks: items.map((it, i) => ({ id: uid('t_'), type: 'music', title: it.title || `Track ${i + 1}`, prompt: it.prompt, lengthMs: (prefs.defaultLengthSec || 60) * 1000, model: prefs.musicModel, instrumental: false, status: 'idle', gain: 1 })),
-    });
-    await refreshProjects();
-    setActive(p);
-    writeSkeleton(p);
-    setModal(null);
+  // Reorganize wizard: create the new groups, then apply each move in order — every from/to path
+  // is computed against the tree as it stands at that step, so batch moves compose. Optionally drop
+  // groups the moves left empty (walking up, since a parent may empty out in turn).
+  async function applyRearrange(plan, prune) {
+    let gs = [...groups, ...plan.created]; const ps = new Map(projects.map((p) => [p.id, p]));
+    const sources = new Set();
+    try {
+      for (const g of plan.created) { await saveGroup(g); await fsOp((d) => ensureDir(d, groupFolderPath(g, gs))); }
+      let i = 0;
+      for (const m of plan.moves) {
+        setWizBusy(`Moving ${++i}/${plan.moves.length}…`);
+        if (m.kind === 'group') {
+          const g = gs.find((x) => x.id === m.id); if (!g) continue;
+          const from = groupFolderPath(g, gs); const next = { ...g, parentId: m.parentId };
+          if (g.parentId) sources.add(g.parentId);
+          gs = gs.map((x) => (x.id === m.id ? next : x)); await saveGroup(next);
+          await fsOp((d) => moveDir(d, from, groupFolderPath(next, gs)));
+        } else {
+          const p = ps.get(m.id); if (!p) continue;
+          const from = albumFolderPath(p, gs); const next = { ...p, parentId: m.parentId };
+          if (p.parentId) sources.add(p.parentId);
+          ps.set(m.id, next); await saveProject(next, { keepTime: true });
+          if (activeRef.current?.id === m.id) { activeRef.current = next; setActive(next); }
+          await fsOp((d) => moveDir(d, from, albumFolderPath(next, gs)));
+        }
+      }
+      let pruned = 0;
+      for (let id of prune ? sources : []) {
+        while (id) {
+          const g = gs.find((x) => x.id === id);
+          if (!g || gs.some((x) => x.parentId === id) || [...ps.values()].some((p) => p.parentId === id)) break;
+          await fsOp((d) => removeFromDir(d, groupFolderPath(g, gs)));
+          await deleteGroup(id); gs = gs.filter((x) => x.id !== id); pruned++;
+          if (groupViewId === id) setGroupViewId(null);
+          id = g.parentId;
+        }
+      }
+      groupsRef.current = gs;
+      showToast(`🗂 ${plan.moves.length} moved${plan.created.length ? `, ${plan.created.length} group(s) created` : ''}${pruned ? `, ${pruned} empty removed` : ''}`);
+      setModal(null);
+    } catch (e) { showToast('Reorganize failed: ' + (e.message || e)); }
+    setWizBusy(''); await ensureGrouped(); await refreshGroups(); await refreshProjects();
+    const a = activeRef.current && (await getProject(activeRef.current.id)); // may have landed in "Ungrouped"
+    if (a) { groupsRef.current = await listGroups(); activeRef.current = a; setActive(a); }
+  }
+
+  // Build-album wizard: rows are { title, prompt, file } with either side optional. Audio is stored
+  // as the track's clip and written to the album folder, so it's ready (no spend); prompt-only rows
+  // are gaps to generate; audio-only rows are uploads.
+  async function buildAlbum({ title, group, description, rows }) {
+    setWizBusy('Creating…');
+    try {
+      const { parentId, created } = ensureGroupPath(group, groups, () => uid('g_'));
+      for (const g of created) await saveGroup(g);
+      const all = [...groups, ...created]; groupsRef.current = all;
+      const base = { id: uid('p_'), title: title.trim() || 'New album', artist: '', description: description || '', meta: {}, parentId, createdAt: Date.now() };
+      const path = albumFolderPath(base, all);
+      const canWrite = !!dir && (await ensureWritable(dir).catch(() => false));
+      const keep = rows.filter((x) => x.file || x.prompt.trim());
+      const tracks = [];
+      for (const [i, r] of keep.entries()) {
+        setWizBusy(`Adding ${i + 1}/${keep.length}…`);
+        const t = { id: uid('t_'), type: r.prompt.trim() ? 'music' : 'upload', title: r.title.trim() || `Track ${i + 1}`, prompt: r.prompt.trim(), lengthMs: (prefs.defaultLengthSec || 60) * 1000, model: prefs.musicModel, instrumental: false, status: 'idle', gain: 1 };
+        if (r.file) {
+          const clipId = uid('clip_'); await putClip(clipId, r.file);
+          Object.assign(t, { clipId, fileName: r.file.name, durationMs: await clipDurationMs(r.file), sizeBytes: r.file.size, mime: r.file.type, status: 'ready' });
+          if (canWrite) {
+            const name = `${sanitizeFilename(t.title)}_${clipId.slice(-5)}.${extOf(r.file.type, r.file.name)}`;
+            try { await writeToDir(dir, `${path}/${name}`, r.file); t.backupFile = name; } catch { /* stays in the browser store */ }
+          }
+        }
+        tracks.push(t);
+      }
+      for (const g of created) await fsOp((d) => ensureDir(d, groupFolderPath(g, all)));
+      await saveProject({ ...base, tracks });
+      await ensureGrouped(); await refreshGroups(); await refreshProjects(); // ungrouped → "Ungrouped"
+      const p = await getProject(base.id); groupsRef.current = await listGroups();
+      if (parentId) setExpanded((x) => new Set(x).add(parentId));
+      setShowLibrary(false); setGroupViewId(null); setPlaylistId(null);
+      lastJsonRef.current = null; setActive(p); writeSkeleton(p);
+      setModal(null);
+      showToast(`🧩 “${p.title}” — ${tracks.filter((t) => t.clipId).length} with audio, ${tracks.filter((t) => !t.clipId).length} to generate`);
+    } catch (e) { showToast('Build failed: ' + (e.message || e)); }
+    setWizBusy('');
   }
 
   async function exportData() {
@@ -625,17 +704,19 @@ export default function App() {
         {dir
           ? <button className="folder-chip" onClick={() => setModal('settings')} title="Connected backup folder — click to change">📁 {dir.name}</button>
           : <button className="folder-chip warn" onClick={() => setModal('settings')} title="No backup folder — click to connect">⚠ Connect folder</button>}
-        <button onClick={() => setModal('paste')} title="New album from a pasted block of song prompts (e.g. from a Claude chat)">📋 Paste prompts</button>
+        <button onClick={() => { setShowLibrary((v) => !v); setShowCloud(false); }} className={showLibrary ? 'primary' : ''} title="Every song in one searchable, sortable table, with library stats">📊 Library</button>
+        <button onClick={() => setModal('build')} title="Build an album from pasted prompts, prompt files and/or audio files — paired up by title">🧩 Build album</button>
+        <button onClick={() => setModal('reorg')} title="Move many groups/albums at once, or sort albums into groups by genre/year/artist">🗂 Reorganize</button>
         <button onClick={() => setModal('import')} disabled={!dir} title="Scan the folder for groups/albums created on disk (e.g. by a Claude Code session)">⟳ Import</button>
         <button onClick={() => setWatch((w) => !w)} disabled={!dir} title="Auto-reload album.json when an external editor (e.g. a Claude Code session) changes it">{watch ? '👁 Watching' : '👁 Watch off'}</button>
         <button onClick={() => setModal('cowork')} title="Hand your albums and prompts to an AI agent through a folder, and read its notes back">🤝 Cowork</button>
-        <button onClick={() => { setShowCloud((v) => !v); if (!drive) connectDrive(); }} className={showCloud ? 'primary' : ''} title="Browse the desktop library published to Google Drive and choose what syncs to your phone">☁ Cloud{requests && pubDir && requestsPending(requests, 0) ? ' •' : ''}</button>
+        <button onClick={() => { setShowCloud((v) => !v); setShowLibrary(false); if (!drive) connectDrive(); }} className={showCloud ? 'primary' : ''} title="Browse the desktop library published to Google Drive and choose what syncs to your phone">☁ Cloud{requests && pubDir && requestsPending(requests, 0) ? ' •' : ''}</button>
         <button onClick={() => setModal('sync')} disabled={!pubDir} title={pubDir ? `Choose which albums are synced to ${pubDir.name} (your device folder)` : 'Set a publish folder in Settings first'}>📱 Sync</button>
         <button onClick={() => setModal('dashboard')}>💲 Spend</button>
         <button onClick={() => setModal('settings')}>⚙ Settings</button>
       </div>
 
-      <div className={`app${showCloud ? ' solo' : ''}`} style={{ gridTemplateColumns: `${sidebarW}px 6px 1fr` }}>
+      <div className={`app${showCloud || showLibrary ? ' solo' : ''}`} style={{ gridTemplateColumns: `${sidebarW}px 6px 1fr` }}>
         <div className="sidebar">
           <Sidebar groups={groups} projects={projects} playlists={playlists} activeId={active?.id} activeGroupId={groupViewId} activePlaylistId={playlistId} expanded={expanded}
             onToggle={(id) => setExpanded((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; })}
@@ -650,6 +731,8 @@ export default function App() {
           {showCloud
             ? <CloudLibrary catalog={catalog} requests={requests} busy={cloudBusy} isDesktop={!!pubDir}
                 onSave={saveCloudRequest} onRefresh={() => (drive ? pullCloud() : connectDrive())} />
+            : showLibrary
+            ? <Library projects={projects} groups={groups} onOpenAlbum={(id) => { setShowLibrary(false); open(id); }} />
             : playlist
             ? <PlaylistView playlist={playlist} projects={projects} groups={groups} onChange={changePlaylist} onRename={() => renamePlaylist(playlist)} onDelete={() => removePlaylist(playlist)} onOpenAlbum={open} />
             : groupView
@@ -677,7 +760,8 @@ export default function App() {
       )}
       {modal === 'dashboard' && <Dashboard onClose={() => setModal(null)} />}
       {modal === 'cowork' && <Cowork projects={projects} groups={groups} onClose={() => setModal(null)} />}
-      {modal === 'paste' && <PastePrompts onClose={() => setModal(null)} onCreate={createFromPrompts} />}
+      {modal === 'build' && <BuildAlbum groups={groups} busy={wizBusy} onCreate={buildAlbum} onClose={() => setModal(null)} />}
+      {modal === 'reorg' && <Reorganize groups={groups} projects={projects} busy={wizBusy} onApply={applyRearrange} onClose={() => setModal(null)} />}
       {modal === 'sync' && pubDir && <DeviceSync projects={projects} groups={groups} syncMap={syncMap} deviceName={pubDir.name} busy={syncBusy} onApply={applySync} onClose={() => setModal(null)} />}
       {modal === 'export' && active && <Export project={active} backupDir={dir} backupName={dir?.name} albumDir={albumPath(active)} gapMs={prefs.gapMs} onClose={() => setModal(null)} />}
       {modal === 'metadata' && active && <Metadata project={active} onChange={updateProject} onClose={() => { setModal(null); writeSkeleton(); }} />}
