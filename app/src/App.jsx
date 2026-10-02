@@ -654,7 +654,7 @@ export default function App() {
       const tracks = [];
       for (const [i, r] of keep.entries()) {
         setWizBusy(`Adding ${i + 1}/${keep.length}…`);
-        const t = { id: uid('t_'), type: r.prompt.trim() ? 'music' : 'upload', title: r.title.trim() || `Track ${i + 1}`, prompt: r.prompt.trim(), lengthMs: (prefs.defaultLengthSec || 60) * 1000, model: prefs.musicModel, instrumental: false, status: 'idle', gain: 1 };
+        const t = { id: uid('t_'), type: r.prompt.trim() ? 'music' : 'upload', title: r.title.trim() || `Track ${i + 1}`, prompt: r.prompt.trim(), sourceUrl: r.url || '', lengthMs: (prefs.defaultLengthSec || 60) * 1000, model: prefs.musicModel, instrumental: false, status: 'idle', gain: 1 };
         if (r.file) {
           const clipId = uid('clip_'); await putClip(clipId, r.file);
           Object.assign(t, { clipId, fileName: r.file.name, durationMs: await clipDurationMs(r.file), sizeBytes: r.file.size, mime: r.file.type, status: 'ready' });

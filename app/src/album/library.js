@@ -5,6 +5,9 @@ import { albumFolderPath, groupFolderPath, isGap } from './skeleton.js';
 import { sanitizeFilename } from '../audio/wav.js';
 import { musicCost, ttsCost } from '../state/pricing.js';
 
+// Only http(s) links are ever rendered — a source URL can come from album.json or the Drive catalog.
+export const safeUrl = (u) => (/^https?:\/\/\S+$/i.test(String(u || '').trim()) ? String(u).trim() : '');
+
 // ── Table rows ────────────────────────────────────────────────────────────────────────────────
 export function libraryRows(projects, groups = []) {
   const rows = [];
@@ -17,9 +20,9 @@ export function libraryRows(projects, groups = []) {
       const r = {
         id: t.id, albumId: p.id, album: p.title || 'Untitled', group, n: i + 1, title: t.title || '', type: t.type || 'music',
         status: t.clipId ? 'ready' : isGap(t) ? 'gap' : 'empty', ms: t.clipId ? (t.durationMs || 0) : 0,
-        planMs: t.lengthMs || 0, fav: !!t.fav, prompt, genre, year, artist, track: t,
+        planMs: t.lengthMs || 0, fav: !!t.fav, prompt, genre, year, artist, url: safeUrl(t.sourceUrl), track: t,
       };
-      r.hay = [r.title, r.album, group, prompt, genre, year, artist].join(' ').toLowerCase();
+      r.hay = [r.title, r.album, group, prompt, genre, year, artist, r.url].join(' ').toLowerCase();
       rows.push(r);
     });
   }
@@ -138,7 +141,11 @@ export function promptsFromText(name, text, parse) {
 // Exact normalized title first, then one title containing the other; leftover audio is appended in
 // filename order. ponytail: title matching only, no fuzzy distance — the wizard lets you re-pair.
 export function pairItems(prompts = [], files = []) {
-  const rows = prompts.map((p) => ({ title: p.title || '', prompt: p.prompt || '', file: null }));
+  // A link pasted alongside a prompt (e.g. the ElevenLabs song page) becomes the row's source URL.
+  const rows = prompts.map((p) => {
+    const url = (p.prompt || '').match(/https?:\/\/\S+/i)?.[0] || '';
+    return { title: p.title || '', prompt: (p.prompt || '').replace(url, '').replace(/\s{2,}/g, ' ').replace(/^[\s—–:-]+|[\s—–:-]+$/g, ''), url, file: null };
+  });
   const left = [...files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   const take = (match) => {
     for (const r of rows) {
@@ -149,6 +156,6 @@ export function pairItems(prompts = [], files = []) {
   };
   take((a, b) => a === b);
   take((a, b) => Math.min(a.length, b.length) >= 3 && (a.includes(b) || b.includes(a)));
-  for (const f of left) rows.push({ title: fileTitle(f.name), prompt: '', file: f });
+  for (const f of left) rows.push({ title: fileTitle(f.name), prompt: '', url: '', file: f });
   return rows;
 }

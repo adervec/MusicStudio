@@ -319,6 +319,15 @@ import { bufToB64, b64ToBuf } from '../state/db.js';
     ['Neon Rain!', 'p1', '01 Neon Rain_k3x9a.mp3'], ['Steel', 'p2', '02 Steel Sky.wav'], ['Ghost', 'p3', null], ['Outro', '', 'Outro.flac']]);
   assert.deepEqual(L.promptsFromText('Neon Rain.txt', 'darksynth, 120 BPM', parsePromptBlob), [{ title: 'Neon Rain', prompt: 'darksynth, 120 BPM' }], 'one-prompt file is titled by its name');
   assert.equal(L.promptsFromText('list.md', '1. A — x\n2. B — y', parsePromptBlob).length, 2);
+
+  // Source links: a pasted song-page URL is lifted off the prompt; only http(s) is ever rendered; album.json round-trips it.
+  const [u] = L.pairItems(parsePromptBlob('1. Glass — ambient synth https://elevenlabs.io/music/songs/abc123'), []);
+  assert.deepEqual([u.prompt, u.url], ['ambient synth', 'https://elevenlabs.io/music/songs/abc123']);
+  assert.equal(L.safeUrl('javascript:alert(1)'), '');
+  assert.equal(L.safeUrl(' https://elevenlabs.io/x '), 'https://elevenlabs.io/x');
+  const sk = { id: 'p', title: 'A', tracks: [{ id: 't', type: 'music', title: 'x', prompt: 'p', sourceUrl: 'https://elevenlabs.io/s/1' }] };
+  assert.equal(mergeSkeleton(sk, buildAlbumJson(sk)).tracks[0].sourceUrl, 'https://elevenlabs.io/s/1');
+  assert.equal(L.libraryRows([{ ...sk, tracks: [{ ...sk.tracks[0], sourceUrl: 'javascript:x' }] }])[0].url, '', 'unsafe links never reach the table');
 }
 
 console.log('ok — wav/pricing/skeleton/path/import/edits/gaps/playlists/backup/paste/sync/catalog/library self-check passed');

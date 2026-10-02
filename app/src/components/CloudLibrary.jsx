@@ -1,3 +1,4 @@
+import { safeUrl } from '../album/library.js';
 import { useEffect, useMemo, useState } from 'react';
 import { fmtDuration } from '../state/pricing.js';
 import { pendingChanges, initialWant } from '../cloud/catalog.js';
@@ -90,6 +91,7 @@ export default function CloudLibrary({ catalog, requests, busy, onSave, onRefres
                         {t.fav ? '★ ' : ''}{t.title || <span className="dim">untitled</span>}
                         {t.ms ? <span className="dim"> · {fmtDuration(t.ms)}</span> : null}
                         {!t.ready && <span className="dim"> · not generated</span>}
+                        {safeUrl(t.url) && <> · <a href={safeUrl(t.url)} target="_blank" rel="noopener noreferrer">song page ↗</a></>}
                         {t.prompt && <div className="dim" style={{ fontSize: 12, whiteSpace: 'pre-wrap' }}>{t.prompt}</div>}
                       </li>
                     ))}

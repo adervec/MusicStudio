@@ -28,7 +28,7 @@ function albumEntry(p, groups, syncMap) {
     syncedAt: syncMap?.[p.id]?.at || 0,
     tracks: tracks.map((t) => ({
       title: t.title || '', type: t.type || 'music', ready: !!t.clipId,
-      ms: t.durationMs || 0, prompt: t.prompt || t.text || '', fav: !!t.fav,
+      ms: t.durationMs || 0, prompt: t.prompt || t.text || '', fav: !!t.fav, url: t.sourceUrl || '',
     })),
   };
 }

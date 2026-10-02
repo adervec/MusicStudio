@@ -60,7 +60,7 @@ export default function BuildAlbum({ groups, busy, onCreate, onClose }) {
           <button className="primary" disabled={!!busy || !rows.length} onClick={() => onCreate({ ...album, rows })}>{busy || `Create album (${rows.length} track${rows.length === 1 ? '' : 's'})`}</button></>}>
       {step === 1 ? (
         <>
-          <label>Paste prompts — numbered “Title — prompt” lines, “Title: prompt”, or headings + paragraphs (e.g. from a Claude chat)</label>
+          <label>Paste prompts — numbered “Title — prompt” lines, “Title: prompt”, or headings + paragraphs (e.g. from a Claude chat). A link on a prompt (e.g. its ElevenLabs song page) is kept as the song's source.</label>
           <textarea rows={9} value={paste} onChange={(e) => setPaste(e.target.value)} spellCheck={false}
             placeholder={'1. Neon Rain — darksynth, heavy arps, 120 BPM\n2. Steel Sky: ambient drone, distant choirs'} />
           <div className="row" style={{ marginTop: 10 }}>
@@ -92,7 +92,8 @@ export default function BuildAlbum({ groups, busy, onCreate, onClose }) {
                 {rows.map((r, i) => (
                   <tr key={i}>
                     <td className="dim">{i + 1}</td>
-                    <td style={{ width: '22%' }}><input value={r.title} onChange={(e) => patch(i, { title: e.target.value })} placeholder={`Track ${i + 1}`} /></td>
+                    <td style={{ width: '22%' }}><input value={r.title} onChange={(e) => patch(i, { title: e.target.value })} placeholder={`Track ${i + 1}`} />
+                      <input value={r.url} onChange={(e) => patch(i, { url: e.target.value.trim() })} placeholder="🔗 song page URL" style={{ marginTop: 4, fontSize: 12 }} /></td>
                     <td><textarea rows={2} style={{ minHeight: 0 }} value={r.prompt} onChange={(e) => patch(i, { prompt: e.target.value })} placeholder="(no prompt — kept as an upload)" /></td>
                     <td style={{ width: '26%' }}>
                       <select value={r.file ? audio.indexOf(r.file) : ''} onChange={(e) => assign(i, e.target.value)} style={{ borderColor: r.file ? 'var(--good)' : undefined }}>
@@ -111,8 +112,8 @@ export default function BuildAlbum({ groups, busy, onCreate, onClose }) {
             </table>
           </div>
           <div className="row" style={{ marginTop: 8 }}>
-            <button className="mini" onClick={() => setRows((rs) => [...rs, { title: '', prompt: '', file: null }])}>＋ Row</button>
-            {!!unused.length && <button className="mini" onClick={() => setRows((rs) => [...rs, ...unused.map((f) => ({ title: f.name.replace(/\.[^.]+$/, ''), prompt: '', file: f }))])}>＋ Add {unused.length} unused audio file{unused.length === 1 ? '' : 's'}</button>}
+            <button className="mini" onClick={() => setRows((rs) => [...rs, { title: '', prompt: '', url: '', file: null }])}>＋ Row</button>
+            {!!unused.length && <button className="mini" onClick={() => setRows((rs) => [...rs, ...unused.map((f) => ({ title: f.name.replace(/\.[^.]+$/, ''), prompt: '', url: '', file: f }))])}>＋ Add {unused.length} unused audio file{unused.length === 1 ? '' : 's'}</button>}
             <span className="dim" style={{ fontSize: 12 }}>↔ = already used by another row (picking it moves it here)</span>
           </div>
         </>

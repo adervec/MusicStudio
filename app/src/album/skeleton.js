@@ -77,7 +77,7 @@ export function buildAlbumJson(project) {
       prompt: t.prompt || '', lengthSec: Math.round((t.lengthMs || 60000) / 1000),
       model: t.model || 'music_v2', instrumental: !!t.instrumental,
       text: t.text || '', voiceId: t.voiceId || '', voiceName: t.voiceName || '',
-      gain: t.gain ?? 1,
+      gain: t.gain ?? 1, sourceUrl: t.sourceUrl || '',
       generated: !!t.clipId, file: t.backupFile || null, // written by the app; agents leave these alone
     })),
     // Reference material for the agent — style guides, inspirations, notes. Files live in attachments/.
@@ -104,6 +104,7 @@ export function mergeSkeleton(project, json) {
       voiceId: j.voiceId ?? prev.voiceId ?? '',
       voiceName: j.voiceName ?? prev.voiceName ?? '',
       gain: j.gain ?? prev.gain ?? 1,
+      sourceUrl: j.sourceUrl ?? prev.sourceUrl ?? '',
       importFile: j.importFile || undefined, // pre-existing audio to attach (backfill); app-consumed
       clipId: prev.clipId || null,          // never invent audio from a skeleton
       durationMs: prev.durationMs || 0,
@@ -258,6 +259,7 @@ Rewrite \`tracks[]\` into a complete skeleton that delivers the brief:
     "voiceId": string,            // dialog only — leave "" unless told a voice
     "voiceName": string,          // dialog only — describe the voice you want
     "gain": number,               // 0..1.5 (1 = unchanged)
+    "sourceUrl": string,          // OPTIONAL: web page the song was made on (e.g. its ElevenLabs song page)
     "importFile": string,         // OPTIONAL: filename of an EXISTING audio file in THIS album folder to
                                   //   attach as this track's audio (backfill; see below). e.g. "01 intro.mp3"
     "generated": boolean,         // app-managed — DO NOT edit

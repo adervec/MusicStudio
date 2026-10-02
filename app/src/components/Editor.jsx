@@ -1,3 +1,4 @@
+import { safeUrl } from '../album/library.js';
 import { useState } from 'react';
 import { uid, putClip, getClip, deleteClip } from '../state/db.js';
 import { composeMusic, tts, MUSIC_MODELS, TTS_MODELS } from '../api/elevenlabs.js';
@@ -271,6 +272,8 @@ export default function Editor({ project, apiKey, prefs, voices, backupReady, gr
               {t.status === 'gen' ? 'Calling ElevenLabs…' : t.status === 'error' ? '⚠ ' + t.error : t.clipId ? '✓ ready' : ''}
             </span>
             <div className="grow" />
+            <input value={t.sourceUrl || ''} onChange={(e) => patch(t.id, { sourceUrl: e.target.value.trim() })} placeholder="🔗 song page URL (e.g. ElevenLabs)" title="The web page this song was generated on" style={{ width: 230, fontSize: 12, padding: '3px 7px' }} />
+            {safeUrl(t.sourceUrl) && <a href={safeUrl(t.sourceUrl)} target="_blank" rel="noopener noreferrer" title="Open the page this song was generated on">↗</a>}
             {t.clipId && <span className="gain">vol <input type="range" min="0" max="1.5" step="0.05" value={t.gain ?? 1} onChange={(e) => patch(t.id, { gain: +e.target.value })} />{Math.round((t.gain ?? 1) * 100)}%</span>}
           </div>
 

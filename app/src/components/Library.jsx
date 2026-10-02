@@ -9,7 +9,7 @@ import { download } from '../backup/fs.js';
 const COLS = [
   { key: 'fav', label: '★' }, { key: 'title', label: 'Title' }, { key: 'album', label: 'Album' }, { key: 'group', label: 'Group' },
   { key: 'n', label: '#' }, { key: 'type', label: 'Type' }, { key: 'status', label: 'Status' }, { key: 'ms', label: 'Length' },
-  { key: 'genre', label: 'Genre' }, { key: 'year', label: 'Year' }, { key: 'prompt', label: 'Prompt' },
+  { key: 'genre', label: 'Genre' }, { key: 'year', label: 'Year' }, { key: 'url', label: '🔗' }, { key: 'prompt', label: 'Prompt' },
 ];
 const BREAKDOWNS = [
   { label: 'By group', fn: (r) => r.group.split('/')[0] }, { label: 'By genre', fn: (r) => r.genre },
@@ -38,12 +38,12 @@ export default function Library({ projects, groups, onOpenAlbum }) {
         <h2 style={{ fontSize: 20 }}>📊 Library</h2>
         <div className="grow" />
         <button className="mini" onClick={() => setShowStats((v) => !v)}>{showStats ? 'Hide stats' : 'Show stats'}</button>
-        <button className="mini" onClick={() => download(new Blob([toCsv(rows, ['album', 'group', 'n', 'title', 'type', 'status', 'ms', 'genre', 'year', 'artist', 'fav', 'prompt'])], { type: 'text/csv' }), 'musicstudio-library.csv')} disabled={!rows.length}>⤓ CSV</button>
+        <button className="mini" onClick={() => download(new Blob([toCsv(rows, ['album', 'group', 'n', 'title', 'type', 'status', 'ms', 'genre', 'year', 'artist', 'fav', 'url', 'prompt'])], { type: 'text/csv' }), 'musicstudio-library.csv')} disabled={!rows.length}>⤓ CSV</button>
         <button className="primary" onClick={() => player.playQueue(ready)} disabled={!ready.length}>▶ Play {filtered ? 'filtered' : 'all'} ({ready.length})</button>
       </div>
 
       <div className="lib-filters">
-        <input value={f.q} onChange={set('q')} placeholder="Search titles, albums, prompts, genres…" style={{ flex: 3 }} />
+        <input value={f.q} onChange={set('q')} placeholder="Search titles, albums, prompts, genres, links…" style={{ flex: 3 }} />
         <select value={f.group} onChange={set('group')}><option value="">All groups</option>{groupOpts.map((g) => <option key={g} value={g}>{g}</option>)}</select>
         <select value={f.type} onChange={set('type')}><option value="">All types</option><option value="music">Song</option><option value="dialog">Dialog</option><option value="upload">Upload</option></select>
         <select value={f.status} onChange={set('status')}><option value="">Any status</option><option value="ready">Ready</option><option value="gap">Gap (to generate)</option><option value="empty">Empty</option></select>
@@ -104,6 +104,7 @@ export default function Library({ projects, groups, onOpenAlbum }) {
                 <td className="dim">{r.ms ? fmtDuration(r.ms) : ''}</td>
                 <td>{r.genre}</td>
                 <td>{r.year}</td>
+                <td>{r.url && <a href={r.url} target="_blank" rel="noopener noreferrer" title={r.url}>↗</a>}</td>
                 <td className="lib-prompt" title={r.prompt}>{r.prompt}</td>
               </tr>
             ))}
