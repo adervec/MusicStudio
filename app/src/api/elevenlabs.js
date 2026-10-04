@@ -13,6 +13,14 @@ export const MUSIC_MODELS = [
   { id: 'music_v2', label: 'Music v2' },
   { id: 'music_v1', label: 'Music v1 — deprecated' },
 ];
+// Tracks follow the newest model unless the human pinned one in the app (t.modelPinned). The stored
+// t.model of an unpinned track is history (whatever was current when it was made), never a choice —
+// so a new model release upgrades every gap automatically. Put new models FIRST in MUSIC_MODELS.
+export const LATEST_MUSIC_MODEL = MUSIC_MODELS[0].id;
+export const musicModelFor = (t) => (t?.modelPinned && MUSIC_MODELS.some((m) => m.id === t.model) ? t.model : LATEST_MUSIC_MODEL);
+// Model fields for a new track from the Settings default ('latest' = follow the newest).
+export const newTrackModel = (prefs) => (prefs?.musicModel && prefs.musicModel !== 'latest' && MUSIC_MODELS.some((m) => m.id === prefs.musicModel)
+  ? { model: prefs.musicModel, modelPinned: true } : { model: LATEST_MUSIC_MODEL, modelPinned: false });
 // Compose prompt limit, from ElevenLabs' OpenAPI spec (verified 2026-10-04).
 export const MUSIC_PROMPT_MAX = 4100;
 export const TTS_MODELS = [
@@ -30,7 +38,7 @@ async function errorFrom(r) {
 }
 
 // Generate a song from a text prompt → audio/mpeg Blob. lengthMs 3000–600000. Logs music spend.
-export async function composeMusic({ prompt, lengthMs = 60000, model = 'music_v2', instrumental = false, apiKey }) {
+export async function composeMusic({ prompt, lengthMs = 60000, model = LATEST_MUSIC_MODEL, instrumental = false, apiKey }) {
   const body = {
     prompt: (prompt || '').trim(),
     music_length_ms: Math.max(3000, Math.min(600000, Math.round(lengthMs))),

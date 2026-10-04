@@ -37,8 +37,9 @@ export default function Settings({ ttsModels, apiKey, prefs, voices, backupName,
 
       <div className="section">Defaults</div>
       <label>Music model</label>
-      <select value={p.musicModel} onChange={(e) => set('musicModel', e.target.value)}>
-        {MUSIC_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+      <select value={p.musicModel || 'latest'} onChange={(e) => set('musicModel', e.target.value)}>
+        <option value="latest">Latest — always ElevenLabs' newest model (recommended)</option>
+        {MUSIC_MODELS.map((m) => <option key={m.id} value={m.id}>📌 Pin: {m.label}</option>)}
       </select>
       <label>Default song length (seconds)</label>
       <input type="number" min="3" max="600" value={p.defaultLengthSec} onChange={(e) => set('defaultLengthSec', +e.target.value)} />

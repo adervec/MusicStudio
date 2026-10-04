@@ -330,6 +330,25 @@ import { bufToB64, b64ToBuf } from '../state/db.js';
   assert.equal(L.libraryRows([{ ...sk, tracks: [{ ...sk.tracks[0], sourceUrl: 'javascript:x' }] }])[0].url, '', 'unsafe links never reach the table');
 }
 
+// Model choice: unpinned tracks (incl. every legacy track storing music_v1/v2) generate on the newest
+// model; only an in-app pin holds an older one; album.json can't pin or downgrade.
+{
+  const { MUSIC_MODELS, LATEST_MUSIC_MODEL, musicModelFor, newTrackModel } = await import('../api/elevenlabs.js');
+  assert.equal(LATEST_MUSIC_MODEL, MUSIC_MODELS[0].id);
+  assert.equal(LATEST_MUSIC_MODEL, 'music_v2_5');
+  assert.equal(musicModelFor({ model: 'music_v2' }), 'music_v2_5', 'legacy stored model is history, not a choice');
+  assert.equal(musicModelFor({ model: 'music_v2', modelPinned: true }), 'music_v2');
+  assert.equal(musicModelFor({ model: 'bogus', modelPinned: true }), 'music_v2_5', 'unknown pins fall back to latest');
+  assert.deepEqual(newTrackModel({ musicModel: 'latest' }), { model: 'music_v2_5', modelPinned: false });
+  assert.deepEqual(newTrackModel({ musicModel: 'music_v1' }), { model: 'music_v1', modelPinned: true });
+  const proj = { id: 'p', title: 'A', tracks: [{ id: 'u', type: 'music', prompt: 'x', model: 'music_v2' }, { id: 'k', type: 'music', prompt: 'y', model: 'music_v1', modelPinned: true }] };
+  const json = buildAlbumJson(proj);
+  assert.deepEqual(json.tracks.map((t) => t.model), ['latest', 'music_v1']);
+  json.tracks[0].model = 'music_v1'; json.tracks.push({ id: 'n', type: 'music', prompt: 'z', model: 'music_v2' });
+  const merged = mergeSkeleton(proj, json).tracks;
+  assert.deepEqual(merged.map(musicModelFor), ['music_v2_5', 'music_v1', 'music_v2_5'], 'album.json edits never pin/downgrade; the app pin survives');
+}
+
 // Markdown preview: escapes HTML first (no injection), renders the safe subset, refuses non-http links.
 {
   const { renderMarkdown } = await import('../album/markdown.js');

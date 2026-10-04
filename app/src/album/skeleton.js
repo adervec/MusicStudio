@@ -75,7 +75,7 @@ export function buildAlbumJson(project) {
     tracks: (project.tracks || []).map((t) => ({
       id: t.id, type: t.type, title: t.title || '',
       prompt: t.prompt || '', lengthSec: Math.round((t.lengthMs || 60000) / 1000),
-      model: t.model || 'music_v2', instrumental: !!t.instrumental,
+      model: t.modelPinned && t.model ? t.model : 'latest', instrumental: !!t.instrumental, // app-managed
       text: t.text || '', voiceId: t.voiceId || '', voiceName: t.voiceName || '',
       gain: t.gain ?? 1, sourceUrl: t.sourceUrl || '',
       generated: !!t.clipId, file: t.backupFile || null, // written by the app; agents leave these alone
@@ -98,7 +98,7 @@ export function mergeSkeleton(project, json) {
       title: j.title ?? prev.title ?? '',
       prompt: j.prompt ?? prev.prompt ?? '',
       lengthMs: j.lengthSec != null ? Math.max(3000, Math.min(600000, j.lengthSec * 1000)) : (prev.lengthMs || 60000),
-      model: j.model || prev.model || 'music_v2',
+      model: prev.model || '', modelPinned: !!prev.modelPinned, // app-managed: only the app pins a model; album.json never downgrades
       instrumental: j.instrumental ?? prev.instrumental ?? false,
       text: j.text ?? prev.text ?? '',
       voiceId: j.voiceId ?? prev.voiceId ?? '',
@@ -255,7 +255,7 @@ Rewrite \`tracks[]\` into a complete skeleton that delivers the brief:
     "title": string,
     "prompt": string,             // music only — the generation prompt
     "lengthSec": number,          // music only — 3..600
-    "model": "music_v2"|"music_v1",
+    "model": string,              // app-managed — "latest" (newest model) unless the human pinned one; DO NOT edit
     "instrumental": boolean,      // music only
     "text": string,               // dialog only — the spoken words
     "voiceId": string,            // dialog only — leave "" unless told a voice

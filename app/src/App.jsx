@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { uid, listProjects, getProject, saveProject, deleteProject, listGroups, saveGroup, deleteGroup, listPlaylists, savePlaylist, deletePlaylist, putAttachment, getAttachment, deleteAttachment, getClip, putClip, deleteClip, getSetting, setSetting, getBackupDir, setBackupDir, clearBackupDir, getPublishDir, setPublishDir, clearPublishDir, exportAllData, importAllData } from './state/db.js';
-import { listVoices, listTtsModels, TTS_MODELS } from './api/elevenlabs.js';
+import { listVoices, listTtsModels, TTS_MODELS, newTrackModel } from './api/elevenlabs.js';
 import { pickBackupDir, ensureWritable, writeToDir, readTextFrom, readBlobFrom, listFiles, removeFromDir, ensureDir, moveDir, removeDir, listAlbumDirs, scanAlbums, looksLikeAppFolder, download, pickFile } from './backup/fs.js';
 import { publishAlbum } from './backup/publish.js';
 import { planSync } from './backup/sync.js';
@@ -27,7 +27,7 @@ import CloudLibrary from './components/CloudLibrary.jsx';
 import { driveConnect, driveDisconnect, driveConnected, driveProfile, driveUploadJson, driveDownloadJson, driveStat, driveClientId, CATALOG_FILE, REQUEST_FILE } from './cloud/drive.js';
 import { buildCatalog, buildRequests, requestsPending } from './cloud/catalog.js';
 
-const DEFAULT_PREFS = { musicModel: 'music_v2_5', ttsModel: 'eleven_multilingual_v2', defaultVoiceId: '', defaultLengthSec: 60, gapMs: 800, backupPath: '', deviceName: '', driveClientId: '' };
+const DEFAULT_PREFS = { musicModel: 'latest', ttsModel: 'eleven_multilingual_v2', defaultVoiceId: '', defaultLengthSec: 60, gapMs: 800, backupPath: '', deviceName: '', driveClientId: '' };
 const extOf = (mime, fileName) => (fileName?.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase()) || (mime === 'audio/wav' ? 'wav' : mime === 'audio/mpeg' ? 'mp3' : 'mp3');
 
 export default function App() {
@@ -109,7 +109,11 @@ export default function App() {
       setGroups(gs); setProjects(ps); refreshPlaylists();
       const k = await getSetting('apiKey', '');
       setApiKey(k);
-      setPrefs({ ...DEFAULT_PREFS, ...(await getSetting('prefs', {})) });
+      const savedPrefs = { ...DEFAULT_PREFS, ...(await getSetting('prefs', {})) };
+      if (!(await getSetting('musicLatestMigrated', false))) { // one-time: a saved v1/v2 default was never a real choice
+        savedPrefs.musicModel = 'latest'; await setSetting('prefs', savedPrefs); await setSetting('musicLatestMigrated', true);
+      }
+      setPrefs(savedPrefs);
       setSidebarW(await getSetting('sidebarW', 240));
       const ign = await getSetting('ignoredFolders', []);
       setIgnored(ign);
@@ -703,7 +707,7 @@ export default function App() {
       const tracks = [];
       for (const [i, r] of keep.entries()) {
         setWizBusy(`Adding ${i + 1}/${keep.length}…`);
-        const t = { id: uid('t_'), type: r.prompt.trim() ? 'music' : 'upload', title: r.title.trim() || `Track ${i + 1}`, prompt: r.prompt.trim(), sourceUrl: r.url || '', lengthMs: (prefs.defaultLengthSec || 60) * 1000, model: prefs.musicModel, instrumental: false, status: 'idle', gain: 1 };
+        const t = { id: uid('t_'), type: r.prompt.trim() ? 'music' : 'upload', title: r.title.trim() || `Track ${i + 1}`, prompt: r.prompt.trim(), sourceUrl: r.url || '', lengthMs: (prefs.defaultLengthSec || 60) * 1000, ...newTrackModel(prefs), instrumental: false, status: 'idle', gain: 1 };
         if (r.file) {
           const clipId = uid('clip_'); await putClip(clipId, r.file);
           Object.assign(t, { clipId, fileName: r.file.name, durationMs: await clipDurationMs(r.file), sizeBytes: r.file.size, mime: r.file.type, status: 'ready' });

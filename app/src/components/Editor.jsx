@@ -1,7 +1,7 @@
 import { safeUrl, normTitle } from '../album/library.js';
 import { useState } from 'react';
 import { uid, putClip, getClip, deleteClip } from '../state/db.js';
-import { composeMusic, tts, MUSIC_MODELS, TTS_MODELS, MUSIC_PROMPT_MAX } from '../api/elevenlabs.js';
+import { composeMusic, tts, MUSIC_MODELS, TTS_MODELS, MUSIC_PROMPT_MAX, LATEST_MUSIC_MODEL, musicModelFor, newTrackModel } from '../api/elevenlabs.js';
 import AttachmentStrip from './AttachmentStrip.jsx';
 import { clipDurationMs } from '../audio/wav.js';
 import { pickFile } from '../backup/fs.js';
@@ -49,7 +49,7 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
   const setMeta = (k, v) => updateProject((p) => ({ ...p, [k]: v }));
 
   function addMusic() {
-    setTracks((ts) => [...ts, { id: uid('t_'), type: 'music', title: `Track ${ts.length + 1}`, prompt: '', lengthMs: (prefs.defaultLengthSec || 60) * 1000, model: prefs.musicModel, instrumental: false, status: 'idle', gain: 1 }]);
+    setTracks((ts) => [...ts, { id: uid('t_'), type: 'music', title: `Track ${ts.length + 1}`, prompt: '', lengthMs: (prefs.defaultLengthSec || 60) * 1000, ...newTrackModel(prefs), instrumental: false, status: 'idle', gain: 1 }]);
   }
   function addDialog() {
     const v = voices.find((x) => x.id === prefs.defaultVoiceId);
@@ -74,7 +74,7 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
     patch(t.id, { status: 'gen', error: '' });
     try {
       const blob = t.type === 'music'
-        ? await composeMusic({ prompt: t.prompt, lengthMs: t.lengthMs, model: t.model, instrumental: t.instrumental, apiKey })
+        ? await composeMusic({ prompt: t.prompt, lengthMs: t.lengthMs, model: musicModelFor(t), instrumental: t.instrumental, apiKey })
         : await tts({ text: t.text, voiceId: t.voiceId, model: t.ttsModel, apiKey });
       const clipId = t.clipId || uid('clip_');
       await putClip(clipId, blob);
@@ -256,7 +256,10 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
               </div>
               <div className="row" style={{ marginTop: 6, flexWrap: 'wrap' }}>
                 <div><label>Length (sec)</label><input type="number" min="3" max="600" value={Math.round(t.lengthMs / 1000)} onChange={(e) => patch(t.id, { lengthMs: Math.max(3000, Math.min(600000, +e.target.value * 1000)) })} style={{ width: 90 }} /></div>
-                <div className="grow"><label>Model</label><select value={t.model} onChange={(e) => patch(t.id, { model: e.target.value })}>{MUSIC_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select></div>
+                <div className="grow"><label>Model</label><select value={t.modelPinned ? musicModelFor(t) : 'latest'} onChange={(e) => patch(t.id, e.target.value === 'latest' ? { model: LATEST_MUSIC_MODEL, modelPinned: false } : { model: e.target.value, modelPinned: true })} title="Latest follows ElevenLabs' newest model automatically; pin one only to keep a specific model">
+                  <option value="latest">Latest — {MUSIC_MODELS[0].label.split(' — ')[0]} (recommended)</option>
+                  {MUSIC_MODELS.map((m) => <option key={m.id} value={m.id}>📌 Pin: {m.label}</option>)}
+                </select></div>
                 <label style={{ marginTop: 20 }}><input type="checkbox" checked={!!t.instrumental} onChange={(e) => patch(t.id, { instrumental: e.target.checked })} style={{ width: 'auto', marginRight: 5 }} />Instrumental</label>
               </div>
             </>
@@ -277,7 +280,7 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
           {t.type === 'upload' && (
             <p className="note">Uploaded file: {t.fileName}{' '}
               <button className="mini" title="Turn this upload into a song entry: keep the audio, add the prompt it was made from"
-                onClick={() => patch(t.id, { type: 'music', prompt: '', lengthMs: Math.max(3000, Math.min(600000, Math.round((t.durationMs || 60000) / 1000) * 1000)), model: t.model || prefs.musicModel, instrumental: false })}>＋ Add prompt (make it a song)</button>
+                onClick={() => patch(t.id, { type: 'music', prompt: '', lengthMs: Math.max(3000, Math.min(600000, Math.round((t.durationMs || 60000) / 1000) * 1000)), ...newTrackModel(prefs), instrumental: false })}>＋ Add prompt (make it a song)</button>
             </p>
           )}
 

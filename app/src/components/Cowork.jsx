@@ -1,3 +1,4 @@
+import { musicModelFor } from '../api/elevenlabs.js';
 import { useEffect, useRef, useState } from 'react';
 import Dialog from './Dialog.jsx';
 
@@ -87,7 +88,7 @@ export default function Cowork({ projects, groups, onClose }) {
               title: t.title || '', type: t.type,
               prompt: t.type === 'music' ? (t.prompt || '') : (t.text || ''),
               lengthSec: Math.round((t.lengthMs || 0) / 1000),
-              model: t.model || null, instrumental: !!t.instrumental,
+              model: t.type === 'music' ? musicModelFor(t) : null, instrumental: !!t.instrumental,
               generated: !!t.clipId,
             })),
           }));
