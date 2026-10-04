@@ -3,10 +3,11 @@ import Transport from './Transport.jsx';
 import { fmtDuration } from '../state/pricing.js';
 import { isGap } from '../album/skeleton.js';
 import { descendantIds } from '../album/library.js';
+import AttachmentStrip from './AttachmentStrip.jsx';
 
 // Read-only overview of a group: every album under it (recursively) with its songs, and a Play-all
 // across the whole group. No editing — click an album to open it in the editor.
-export default function GroupView({ group, groups, projects, onOpenAlbum, onCopyPath }) {
+export default function GroupView({ group, groups, projects, onOpenAlbum, onCopyPath, onAttachments }) {
   const player = usePlayer();
 
   const ids = descendantIds(group.id, groups);
@@ -21,10 +22,12 @@ export default function GroupView({ group, groups, projects, onOpenAlbum, onCopy
       <div className="row" style={{ marginBottom: 8 }}>
         <h2 style={{ fontSize: 20 }}>📁 {group.name}</h2>
         <div className="grow" />
+        <button className="mini" onClick={onAttachments} title="Liner notes, artwork or references for this whole set of albums">📎 Attachments{group.attachments?.length ? ` (${group.attachments.length})` : ''}…</button>
         <button className="mini" onClick={onCopyPath} title="Open this group's folder in File Explorer (or copy its path)">📂 Open folder</button>
         <button className="primary" onClick={() => player.playQueue(allReady)} disabled={!allReady.length}>▶ Play all ({allReady.length})</button>
       </div>
       <p className="note">{albums.length} album{albums.length === 1 ? '' : 's'} · {allReady.length} song{allReady.length === 1 ? '' : 's'} · {fmtDuration(totalMs)}{gaps > 0 && <span style={{ color: 'var(--warn)' }}> · {gaps} gap{gaps === 1 ? '' : 's'}</span>} · read-only</p>
+      <AttachmentStrip list={group.attachments} />
       <Transport player={player} label={titleOf} />
 
       {!albums.length && <div className="empty">No albums in this group yet.</div>}

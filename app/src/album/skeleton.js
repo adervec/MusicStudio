@@ -228,6 +228,8 @@ audio in the app (paid ElevenLabs calls).
 - \`description\` — the creative brief. Read it first.
 - \`attachments[]\` — each entry's \`file\` points to a style guide / inspiration / note in that album's
   \`attachments/\` folder. Read them and let them steer the prompts.
+- **Group folders can have an \`attachments/\` folder too** (e.g. liner notes for a whole set of albums).
+  They apply to every album beneath that group — read the ones on the album's path, top-down.
 
 ## Author the tracks
 Rewrite \`tracks[]\` into a complete skeleton that delivers the brief:

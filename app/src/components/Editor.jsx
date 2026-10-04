@@ -2,7 +2,7 @@ import { safeUrl, normTitle } from '../album/library.js';
 import { useState } from 'react';
 import { uid, putClip, getClip, deleteClip } from '../state/db.js';
 import { composeMusic, tts, MUSIC_MODELS, TTS_MODELS, MUSIC_PROMPT_MAX } from '../api/elevenlabs.js';
-import AttachmentPreview from './AttachmentPreview.jsx';
+import AttachmentStrip from './AttachmentStrip.jsx';
 import { clipDurationMs } from '../audio/wav.js';
 import { pickFile } from '../backup/fs.js';
 import { fmtDuration, fmtUsd, musicCost, ttsCost } from '../state/pricing.js';
@@ -32,7 +32,6 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
     setTracks((ts) => ts.filter((t) => !sel.has(t.id)));
     setSel(new Set());
   }
-  const [openAtt, setOpenAtt] = useState(null); // attachment id previewed on the album page
   const staticPlaylists = (playlists || []).filter((p) => p.kind === 'static');
   // 📎 Link file: one track at a time; the album folder's audio, best title match first.
   const [linking, setLinking] = useState(null); // { id, files: null (loading) | [{ name, used, match }] }
@@ -188,17 +187,7 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
         <button onClick={onScanFolder} disabled={!backupReady} title="Scan this album's folder — recover audio for gap tracks and import any loose audio files">🔎 Scan folder</button>
       </div>
 
-      {!!project.attachments?.length && (
-        <div style={{ marginBottom: 10 }}>
-          <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
-            <span className="dim" style={{ fontSize: 12 }}>Attachments:</span>
-            {project.attachments.map((a) => (
-              <button key={a.id} className={`mini${openAtt === a.id ? ' primary' : ''}`} onClick={() => setOpenAtt((x) => (x === a.id ? null : a.id))} title="Preview">{a.kind === 'note' ? '📝' : '📎'} {a.name}</button>
-            ))}
-          </div>
-          {project.attachments.filter((a) => a.id === openAtt).map((a) => <AttachmentPreview key={a.id} a={a} />)}
-        </div>
-      )}
+      <AttachmentStrip list={project.attachments} />
 
       {!backupReady && <p className="note" style={{ color: 'var(--warn)' }}>⚠ Set a backup folder outside the app (Settings) — required before generating, and where the album skeleton is exposed for an external agent.</p>}
 

@@ -10,7 +10,7 @@ const icon = (a) => (a.kind === 'note' ? '📝' : '📎');
 // pasted text), or uploaded files. Everything is written to the album's attachments/ folder so a
 // separate Claude Code session can read it. onAddNote/onAddFiles/onDelete persist + back up; previews
 // render inline (AttachmentPreview); onDownload saves a file.
-export default function Attachments({ project, onAddNote, onAddFiles, onDelete, onDownload, onClose }) {
+export default function Attachments({ title = 'Album attachments', where = 'album', project, onAddNote, onAddFiles, onDelete, onDownload, onClose }) {
   const list = project.attachments || [];
   const [name, setName] = useState('');
   const [text, setText] = useState('');
@@ -26,8 +26,8 @@ export default function Attachments({ project, onAddNote, onAddFiles, onDelete, 
   const toggle = (a) => setOpenId((x) => (x === a.id ? null : a.id));
 
   return (
-    <Dialog title="Album attachments" onClose={onClose} width={620} footer={<button className="primary" onClick={onClose}>Done</button>}>
-      <p className="note">Style guides, inspirations, and notes for this album. Each is saved to <code>{'<album>/attachments/'}</code> in your backup folder so an external Claude Code session can read it while building the skeleton.</p>
+    <Dialog title={title} onClose={onClose} width={620} footer={<button className="primary" onClick={onClose}>Done</button>}>
+      <p className="note">Liner notes, style guides, inspirations and references for this {where}. Each is saved to <code>{`<${where}>/attachments/`}</code> in your backup folder so an external Claude Code session can read it while building the skeleton.</p>
 
       <div className="section">Add</div>
       <div className="row" style={{ gap: 8 }}>

@@ -337,40 +337,50 @@ export default function App() {
     const ext = kind === 'note' ? 'md' : (name.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase() || 'bin');
     return `attachments/${base}_${id.slice(-4)}.${ext}`;
   };
-  async function writeAttachment(file, blob) {
+  // Attachments belong to the open album, or to a group (liner notes for a set of albums) when the
+  // dialog was opened from a group. Files mirror to <that folder>/attachments/.
+  const [attGroupId, setAttGroupId] = useState(null);
+  function attOwner() {
+    const g = attGroupId && groupsRef.current.find((x) => x.id === attGroupId);
+    if (!g) return { path: albumPath(activeRef.current), set: async (fn) => { updateProject((p) => ({ ...p, attachments: fn(p.attachments || []) })); writeSkeleton(); } };
+    return {
+      path: groupFolderPath(g, groupsRef.current),
+      set: async (fn) => { const cur = (await listGroups()).find((x) => x.id === g.id) || g; await saveGroup({ ...cur, attachments: fn(cur.attachments || []) }); await refreshGroups(); },
+    };
+  }
+  async function writeAttachment(path, file, blob) {
     if (!dir) return;
-    try { if (await ensureWritable(dir)) await writeToDir(dir, `${albumPath(activeRef.current)}/${file}`, blob); } catch { /* best-effort */ }
+    try { if (await ensureWritable(dir)) await writeToDir(dir, `${path}/${file}`, blob); } catch { /* best-effort */ }
   }
   async function addNote({ name, text, source }) {
-    const id = uid('a_'); const file = attFilename(name, 'note', id);
+    const o = attOwner(); const id = uid('a_'); const file = attFilename(name, 'note', id);
     await putAttachment(id, { kind: 'note', text });
-    updateProject((p) => ({ ...p, attachments: [...(p.attachments || []), { id, name, kind: 'note', mime: 'text/markdown', size: text.length, source, createdAt: Date.now(), file }] }));
-    await writeAttachment(file, new Blob([text], { type: 'text/markdown' }));
-    writeSkeleton();
+    await o.set((l) => [...l, { id, name, kind: 'note', mime: 'text/markdown', size: text.length, source, createdAt: Date.now(), file }]);
+    await writeAttachment(o.path, file, new Blob([text], { type: 'text/markdown' }));
   }
   async function addFiles(files, source) {
+    const o = attOwner();
     for (const f of files) {
       const id = uid('a_'); const file = attFilename(f.name, 'file', id);
       await putAttachment(id, { kind: 'file', blob: f });
-      updateProject((p) => ({ ...p, attachments: [...(p.attachments || []), { id, name: f.name, kind: 'file', mime: f.type, size: f.size, source, createdAt: Date.now(), file }] }));
-      await writeAttachment(file, f);
+      await o.set((l) => [...l, { id, name: f.name, kind: 'file', mime: f.type, size: f.size, source, createdAt: Date.now(), file }]);
+      await writeAttachment(o.path, file, f);
     }
-    writeSkeleton();
   }
   async function removeAttachment(a) {
+    const o = attOwner();
     await deleteAttachment(a.id);
-    updateProject((p) => ({ ...p, attachments: (p.attachments || []).filter((x) => x.id !== a.id) }));
-    if (dir) { try { await removeFromDir(dir, `${albumPath(activeRef.current)}/${a.file}`); } catch { /* may already be gone */ } }
-    writeSkeleton();
+    await o.set((l) => l.filter((x) => x.id !== a.id));
+    if (dir) { try { await removeFromDir(dir, `${o.path}/${a.file}`); } catch { /* may already be gone */ } }
   }
   async function downloadAttachment(a) { const rec = await getAttachment(a.id); if (rec?.blob) download(rec.blob, a.name); }
   // Write every attachment file to a folder (used when a backup folder is first chosen).
-  async function flushAttachments(p, d) {
-    for (const a of p.attachments || []) {
+  async function flushAttachments(list, path, d) {
+    for (const a of list || []) {
       try {
         const rec = await getAttachment(a.id); if (!rec) continue;
         const blob = rec.kind === 'note' ? new Blob([rec.text || ''], { type: 'text/markdown' }) : rec.blob;
-        await writeToDir(d, `${albumPath(p)}/${a.file}`, blob);
+        await writeToDir(d, `${path}/${a.file}`, blob);
       } catch { /* best-effort */ }
     }
   }
@@ -403,7 +413,7 @@ export default function App() {
     fsOp((d) => moveDir(d, oldPath, newPath)); // rename the folder on disk
   }
   async function removeGroup(g) {
-    if (!confirm(`Delete group “${g.name}”? Its albums and sub-groups move up a level.`)) return;
+    if (!confirm(`Delete group “${g.name}”? Its albums and sub-groups move up a level${g.attachments?.length ? `; its ${g.attachments.length} attachment(s) are deleted` : ''}.`)) return;
     const parent = g.parentId || null;
     const gPath = groupFolderPath(g, groups);
     const childGroups = groups.filter((x) => x.parentId === g.id);
@@ -412,8 +422,10 @@ export default function App() {
     await fsOp(async (d) => { // move direct children up a level, then drop the now-empty group folder
       for (const cg of childGroups) await moveDir(d, groupFolderPath(cg, groups), groupFolderPath({ ...cg, parentId: parent }, newGroups));
       for (const a of childAlbums) await moveDir(d, albumFolderPath(a, groups), albumFolderPath({ ...a, parentId: parent }, newGroups));
+      if (g.attachments?.length) { try { await removeDir(d, `${gPath}/attachments`); } catch { /* */ } }
       try { await removeFromDir(d, gPath); } catch { /* not empty / already gone */ }
     });
+    for (const a of g.attachments || []) await deleteAttachment(a.id);
     for (const cg of childGroups) await saveGroup({ ...cg, parentId: parent });
     for (const pr of childAlbums) await saveProject({ ...pr, parentId: parent });
     await deleteGroup(g.id); if (groupViewId === g.id) setGroupViewId(null); refreshGroups(); refreshProjects();
@@ -533,7 +545,8 @@ export default function App() {
       if (await looksLikeAppFolder(h)) { alert('That folder is (or contains) the Music Studio app. Choose a folder OUTSIDE the app so generated audio and album skeletons never mix with the running code.'); return; }
       await ensureWritable(h); await setBackupDir(h); setDir(h);
       try { await writeToDir(h, 'AGENT.md', new Blob([rootAgentMarkdown()], { type: 'text/markdown' })); } catch { /* best-effort */ }
-      if (activeRef.current) { writeSkeleton(activeRef.current, h); flushAttachments(activeRef.current, h); }
+      if (activeRef.current) { writeSkeleton(activeRef.current, h); flushAttachments(activeRef.current.attachments, albumPath(activeRef.current), h); }
+      for (const g of groups) if (g.attachments?.length) flushAttachments(g.attachments, groupFolderPath(g, groups), h);
       importFromFolder(true, { dir: h }); // discover any groups/albums already on disk
     } catch (e) { if (e?.name !== 'AbortError') alert(e.message); }
   }
@@ -658,7 +671,7 @@ export default function App() {
       for (let id of prune ? sources : []) {
         while (id) {
           const g = gs.find((x) => x.id === id);
-          if (!g || gs.some((x) => x.parentId === id) || [...ps.values()].some((p) => p.parentId === id)) break;
+          if (!g || g.attachments?.length || gs.some((x) => x.parentId === id) || [...ps.values()].some((p) => p.parentId === id)) break;
           await fsOp((d) => removeFromDir(d, groupFolderPath(g, gs)));
           await deleteGroup(id); gs = gs.filter((x) => x.id !== id); pruned++;
           if (groupViewId === id) setGroupViewId(null);
@@ -772,13 +785,13 @@ export default function App() {
             : playlist
             ? <PlaylistView playlist={playlist} projects={projects} groups={groups} onChange={changePlaylist} onRename={() => renamePlaylist(playlist)} onDelete={() => removePlaylist(playlist)} onOpenAlbum={open} />
             : groupView
-            ? <GroupView group={groupView} groups={groups} projects={projects} onOpenAlbum={open} onCopyPath={() => copyGroupPath(groupView)} />
+            ? <GroupView group={groupView} groups={groups} projects={projects} onOpenAlbum={open} onCopyPath={() => copyGroupPath(groupView)} onAttachments={() => { setAttGroupId(groupView.id); setModal('attachments'); }} />
             : active
             ? <Editor project={active} apiKey={apiKey} prefs={prefs} voices={voices} ttsModels={ttsModels} backupReady={!!dir}
                 group={groups.find((g) => g.id === active.parentId)} onTheme={setGroupTheme} coverUrl={coverUrl}
                 updateProject={updateProject} backupClip={backupClip} writeSkeleton={writeSkeleton}
                 onSetCover={setCover} onClearCover={clearCover} onDuplicateAlbum={() => duplicateAlbum(active)} onCopyPath={() => copyAlbumPath(active)}
-                onExport={() => setModal('export')} onMetadata={() => setModal('metadata')} onAttachments={() => setModal('attachments')} onLoadSkeleton={loadSkeleton} onScanFolder={scanAlbumFolder} onListAlbumAudio={listAlbumAudio} onLinkFile={linkTrackFile}
+                onExport={() => setModal('export')} onMetadata={() => setModal('metadata')} onAttachments={() => { setAttGroupId(null); setModal('attachments'); }} onLoadSkeleton={loadSkeleton} onScanFolder={scanAlbumFolder} onListAlbumAudio={listAlbumAudio} onLinkFile={linkTrackFile}
                 playlists={playlists} onAddToPlaylist={addTracksToPlaylist} onPublish={() => publishOne(active)} publishName={pubDir?.name} />
             : <div className="empty" style={{ marginTop: 40 }}>Select an album on the left, or create one.<br />{!apiKey && 'Add your ElevenLabs API key in Settings, and '}set a backup folder (outside the app) before generating.</div>}
         </div>
@@ -801,7 +814,7 @@ export default function App() {
       {modal === 'sync' && pubDir && <DeviceSync projects={projects} groups={groups} syncMap={syncMap} deviceName={pubDir.name} busy={syncBusy} onApply={applySync} onClose={() => setModal(null)} />}
       {modal === 'export' && active && <Export project={active} backupDir={dir} backupName={dir?.name} albumDir={albumPath(active)} gapMs={prefs.gapMs} onClose={() => setModal(null)} />}
       {modal === 'metadata' && active && <Metadata project={active} onChange={updateProject} onClose={() => { setModal(null); writeSkeleton(); }} />}
-      {modal === 'attachments' && active && <Attachments project={active} onAddNote={addNote} onAddFiles={addFiles} onDelete={removeAttachment} onDownload={downloadAttachment} onClose={() => setModal(null)} />}
+      {modal === 'attachments' && (attGroupId ? groups.some((g) => g.id === attGroupId) : active) && <Attachments project={attGroupId ? groups.find((g) => g.id === attGroupId) : active} title={attGroupId ? `Group attachments — ${groups.find((g) => g.id === attGroupId)?.name}` : 'Album attachments'} where={attGroupId ? 'group' : 'album'} onAddNote={addNote} onAddFiles={addFiles} onDelete={removeAttachment} onDownload={downloadAttachment} onClose={() => setModal(null)} />}
       {modal === 'import' && dir && (
         <Import ignored={ignored} onClose={() => setModal(null)}
           onScan={() => scanAlbums(dir, [])}
