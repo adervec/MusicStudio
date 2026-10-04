@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { uid, listProjects, getProject, saveProject, deleteProject, listGroups, saveGroup, deleteGroup, listPlaylists, savePlaylist, deletePlaylist, putAttachment, getAttachment, deleteAttachment, getClip, putClip, deleteClip, getSetting, setSetting, getBackupDir, setBackupDir, clearBackupDir, getPublishDir, setPublishDir, clearPublishDir, exportAllData, importAllData } from './state/db.js';
 import { listVoices, listTtsModels, TTS_MODELS, newTrackModel } from './api/elevenlabs.js';
-import { pickBackupDir, ensureWritable, writeToDir, readTextFrom, readBlobFrom, listFiles, removeFromDir, ensureDir, moveDir, removeDir, listAlbumDirs, scanAlbums, looksLikeAppFolder, download, pickFile } from './backup/fs.js';
-import { publishAlbum } from './backup/publish.js';
+import { pickBackupDir, ensureWritable, writeToDir, readTextFrom, readBlobFrom, listFiles, removeFromDir, ensureDir, moveDir, removeDir, listAlbumDirs, scanAlbums, looksLikeAppFolder, download, pickFile, canWriteQuietly } from './backup/fs.js';
+import { publishAlbum, publishState, publishTargets, masterTargets, coverPicture, retagBlob, renderTrackFile } from './backup/publish.js';
 import { planSync } from './backup/sync.js';
 import { sanitizeFilename, clipDurationMs } from './audio/wav.js';
 import { applyTheme } from './state/themes.js';
@@ -568,7 +568,7 @@ export default function App() {
     try {
       showToast(`⇪ Publishing “${p.title}”…`);
       const n = await publishAlbum(p, pubDir);
-      if (n) await saveSyncMap({ ...syncMap, [p.id]: { on: true, at: Date.now() } }); // published = synced
+      if (n) { await saveSyncMap({ ...syncMap, [p.id]: { on: true, at: Date.now() } }); await notePublished([p]); } // published = synced
       showToast(n ? `⇪ “${p.title}” → ${pubDir.name} (${n} track${n === 1 ? '' : 's'})` : 'No ready tracks to publish yet');
     } catch (e) { showToast('Publish failed: ' + (e.message || e)); }
   }
@@ -590,12 +590,83 @@ export default function App() {
       }
       for (const name of plan.toRemove) { setSyncBusy(`Removing ${name}…`); await removeDir(pubDir, name); }
       await saveSyncMap(m);
+      await notePublished(plan.toWrite, m);
       setSyncBusy('');
       if (!quiet) setModal(null);
       showToast(`📱 Synced — ${plan.toWrite.length} published, ${plan.toRemove.length} removed, ${selIds.size} on device`);
       return m;
     } catch (e) { setSyncBusy(''); showToast('Sync failed: ' + (e.message || e)); return null; }
   }
+
+  // ── File tags follow the app ──────────────────────────────────────────────────────────────
+  // What Explorer and players show for a file (title, album, artist, track no., genre, year, cover…)
+  // is kept equal to the app. ~5s after edits settle, every master file (backup folder) and published
+  // copy whose tags are stale is rewritten — tags only, audio untouched; a published track that was
+  // renamed, renumbered or re-edited is re-rendered instead. Per-file fingerprints (setting
+  // 'fileTagSigs') remember what was written, so unchanged files are never touched. One pass at a time;
+  // never prompts for folder permission (waits until the folder is unlocked by a click).
+  const tagRun = useRef({ busy: false, again: false });
+  const tagSyncRef = useRef(null);
+  async function notePublished(list, onMap = null) { // after a full publish: those folders are current
+    const sigs = await getSetting('fileTagSigs', {});
+    for (const p of list) sigs['p:' + p.id] = publishState(p);
+    if (onMap) for (const k of Object.keys(sigs)) if (k.startsWith('p:') && !onMap[k.slice(2)]) delete sigs[k];
+    await setSetting('fileTagSigs', sigs);
+  }
+  async function runTagSync() {
+    const run = tagRun.current;
+    if (run.busy) { run.again = true; return; }
+    run.busy = true;
+    let n = 0; const republished = [];
+    try {
+      const canM = await canWriteQuietly(dir), canP = await canWriteQuietly(pubDir);
+      if (!canM && !canP) return;
+      const sigs = await getSetting('fileTagSigs', {});
+      const tick = () => { if (++n % 10 === 0) showToast(`🏷 Updating file tags… ${n}`); };
+      for (const p of projects) {
+        let pic; const picture = async () => (pic === undefined ? (pic = await coverPicture(p)) : pic);
+        if (canM) for (const m of masterTargets(p)) {
+          if (sigs['m:' + m.trackId] === m.sig) continue;
+          const path = `${albumFolderPath(p, groups)}/${m.file}`;
+          try { await writeToDir(dir, path, await retagBlob(await readBlobFrom(dir, path), m.ext, { ...m.tags, picture: await picture() })); sigs['m:' + m.trackId] = m.sig; tick(); }
+          catch { /* missing or locked (e.g. open in a player) — retried next pass */ }
+        }
+        if (!canP || !syncMap[p.id]?.on) continue;
+        const st = publishTargets(p); if (!st.files.length) continue;
+        const prev = sigs['p:' + p.id];
+        try {
+          if (!prev || prev.folder !== st.folder || prev.names.join('\n') !== st.files.map((f) => f.name).join('\n')) {
+            if (prev && prev.folder !== st.folder) await removeDir(pubDir, prev.folder).catch(() => {}); // album renamed
+            n += await publishAlbum(p, pubDir); republished.push(p.id);
+          } else {
+            const ready = (p.tracks || []).filter((t) => t.clipId);
+            for (const [i, f] of st.files.entries()) {
+              const was = prev.sigs[f.trackId] || '';
+              if (was === f.sig + f.audio) continue;
+              const path = `${st.folder}/${f.name}`;
+              const out = was.endsWith(f.audio) // same audio → just the tags
+                ? await retagBlob(await readBlobFrom(pubDir, path), f.ext, { ...f.tags, picture: await picture() })
+                : (await renderTrackFile(p, ready[i], i, ready.length, await picture())).out;
+              await writeToDir(pubDir, path, out); tick();
+            }
+          }
+          sigs['p:' + p.id] = publishState(p);
+        } catch { /* retried next pass */ }
+      }
+      await setSetting('fileTagSigs', sigs);
+      if (republished.length) { const at = Date.now(); await saveSyncMap({ ...syncMap, ...Object.fromEntries(republished.map((id) => [id, { on: true, at }])) }); }
+      if (n) showToast(`🏷 File tags up to date (${n} file${n === 1 ? '' : 's'} updated)`);
+    } finally {
+      run.busy = false;
+      if (run.again) { run.again = false; tagSyncRef.current?.(); }
+    }
+  }
+  useEffect(() => { tagSyncRef.current = runTagSync; });
+  useEffect(() => { // debounce: every edit restarts the clock, so typing never triggers a write
+    if (!dir && !pubDir) return;
+    const t = setTimeout(() => tagSyncRef.current?.(), 5000);
+    return () => clearTimeout(t);
+  }, [projects, groups, dir, pubDir, syncMap]);
 
   // ── Google Drive channel — the desktop publishes a catalog; a phone publishes sync requests ──
   async function pushCatalog(map = syncMap, appliedAt = null) {

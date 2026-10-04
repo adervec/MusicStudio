@@ -10,6 +10,9 @@ export async function pickBackupDir() {
 }
 
 // Ensure we still have write permission on a persisted handle (re-prompts if the grant lapsed).
+// Background writers use this: never prompts (a prompt needs a click), just reports.
+export async function canWriteQuietly(handle) { try { return (await handle?.queryPermission?.({ mode: 'readwrite' })) === 'granted'; } catch { return false; } }
+
 export async function ensureWritable(handle) {
   if (!handle) return false;
   const opts = { mode: 'readwrite' };

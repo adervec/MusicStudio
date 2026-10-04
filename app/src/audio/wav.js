@@ -90,9 +90,13 @@ export function assembleAlbum(items, { gapMs = 800, crossfadeMs = 0, sampleRate 
 }
 
 // ── WAV encode (16-bit PCM, mono or stereo). Optional RIFF INFO tags. Pure. ────────────────────
+// RIFF INFO has no encoding field and Windows reads it as Latin-1, so letters outside it lose their
+// accent (č→c, đ→d) instead of turning into '?'. ID3 frames keep full Unicode.
+const deaccent = (ch) => ({ đ: 'd', Đ: 'D', ł: 'l', Ł: 'L', ø: 'o', Ø: 'O' }[ch] || ch.normalize('NFD').replace(/\p{M}/gu, ''));
+function latin1Info(s) { return latin1([...String(s ?? '')].map((ch) => (ch.charCodeAt(0) > 0xff ? deaccent(ch) : ch)).join('')); }
 function latin1(s) { const o = []; for (const ch of String(s ?? '')) { const c = ch.charCodeAt(0); o.push(c > 0xff ? 0x3f : c); } return o; }
 function buildInfoList(tags = {}) {
-  const sub = (id, text) => { const b = [...latin1(text), 0]; if (b.length % 2) b.push(0); return { id, bytes: b }; };
+  const sub = (id, text) => { const b = [...latin1Info(text), 0]; if (b.length % 2) b.push(0); return { id, bytes: b }; };
   const subs = [];
   const add = (id, v) => { if (v != null && v !== '') subs.push(sub(id, String(v))); };
   add('INAM', tags.title); add('IART', tags.artist); add('IPRD', tags.album);
@@ -137,12 +141,16 @@ function concatBytes(list) { let n = 0; for (const a of list) n += a.length; con
 export function buildId3v2(tags = {}) {
   const frameBytes = (id, payload) => { const n = payload.length; return concatBytes([new Uint8Array([...latin1(id), (n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff, 0, 0]), payload]); };
   const frames = [];
-  const add = (id, v) => { if (v != null && v !== '') frames.push(frameBytes(id, new Uint8Array([0x00, ...latin1(String(v))]))); };
+  const add = (id, v) => { if (v != null && v !== '') frames.push(frameBytes(id, id3Text(String(v)))); };
   add('TIT2', tags.title); add('TPE1', tags.artist); add('TALB', tags.album);
   if (tags.track) add('TRCK', tags.trackTotal ? `${tags.track}/${tags.trackTotal}` : tags.track);
   add('TPE2', tags.albumArtist); add('TCON', tags.genre); add('TYER', tags.year);
   add('TCOM', tags.composer); add('TPUB', tags.publisher); add('TCOP', tags.copyright);
-  add('TBPM', tags.bpm); add('TLAN', tags.language); add('TIT1', tags.grouping); add('TIT3', tags.comment);
+  add('TBPM', tags.bpm); add('TLAN', tags.language); add('TIT1', tags.grouping);
+  if (tags.comment) { // COMM (what Explorer shows as Comments): encoding, 'eng', empty description, text
+    const t = id3Text(String(tags.comment)), uni = t[0] === 0x01;
+    frames.push(frameBytes('COMM', concatBytes([new Uint8Array([t[0], 0x65, 0x6e, 0x67, ...(uni ? [0xff, 0xfe, 0, 0] : [0])]), t.subarray(1)])));
+  }
   if (tags.discNumber) add('TPOS', tags.discTotal ? `${tags.discNumber}/${tags.discTotal}` : tags.discNumber);
   if (tags.picture?.bytes?.length) { // APIC: encoding, mime\0, picture-type 0x03 (front), desc\0, data
     frames.push(frameBytes('APIC', concatBytes([new Uint8Array([0x00, ...latin1(tags.picture.mime || 'image/jpeg')]), new Uint8Array([0x00, 0x03, 0x00]), tags.picture.bytes])));
@@ -150,6 +158,58 @@ export function buildId3v2(tags = {}) {
   const body = concatBytes(frames);
   const n = body.length;
   return concatBytes([new Uint8Array([0x49, 0x44, 0x33, 3, 0, 0, (n >>> 21) & 0x7f, (n >>> 14) & 0x7f, (n >>> 7) & 0x7f, n & 0x7f]), body]);
+}
+
+// ID3 text payload: latin1 when it fits, else UTF-16 with BOM (both ID3v2.3-legal).
+function id3Text(s) {
+  if (![...s].some((ch) => ch.charCodeAt(0) > 0xff)) return new Uint8Array([0x00, ...latin1(s)]);
+  const out = [0x01, 0xff, 0xfe];
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); out.push(c & 0xff, c >>> 8); }
+  return new Uint8Array(out);
+}
+
+// Replace the tags of an existing MP3 or WAV without touching the audio → new bytes, or null when the
+// format isn't supported / the file doesn't parse (callers then leave the file alone). MP3: drops every
+// leading ID3v2 tag + a trailing ID3v1, prepends a fresh ID3v2. WAV: drops LIST/INFO and id3 chunks,
+// appends a fresh LIST/INFO (what Windows Explorer reads) and an 'id3 ' chunk (players; carries the
+// cover). ponytail: mp3/wav only — FLAC/M4A/OGG are skipped, add when such masters show up.
+export function retagBytes(bytes, ext, tags = {}) {
+  ext = String(ext || '').toLowerCase();
+  if (ext === 'mp3') {
+    let start = 0;
+    while (bytes.length >= start + 10 && bytes[start] === 0x49 && bytes[start + 1] === 0x44 && bytes[start + 2] === 0x33) {
+      const size = ((bytes[start + 6] & 0x7f) << 21) | ((bytes[start + 7] & 0x7f) << 14) | ((bytes[start + 8] & 0x7f) << 7) | (bytes[start + 9] & 0x7f);
+      start += 10 + size + (bytes[start + 5] & 0x10 ? 10 : 0);
+    }
+    let end = bytes.length;
+    if (end - start >= 128 && bytes[end - 128] === 0x54 && bytes[end - 127] === 0x41 && bytes[end - 126] === 0x47) end -= 128;
+    if (start >= end) return null;
+    return concatBytes([buildId3v2(tags), bytes.subarray(start, end)]);
+  }
+  if (ext === 'wav') {
+    const str = (o) => String.fromCharCode(bytes[o], bytes[o + 1], bytes[o + 2], bytes[o + 3]);
+    if (bytes.length < 12 || str(0) !== 'RIFF' || str(8) !== 'WAVE') return null;
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const keep = []; let o = 12, fmt = false, data = false;
+    while (o + 8 <= bytes.length) {
+      const id = str(o), size = dv.getUint32(o + 4, true), next = o + 8 + size + (size & 1);
+      if (o + 8 + size > bytes.length) return null; // truncated / streaming-size chunk — don't guess
+      const drop = id === 'id3 ' || id === 'ID3 ' || (id === 'LIST' && size >= 4 && str(o + 8) === 'INFO');
+      if (id === 'fmt ') fmt = true; if (id === 'data') data = true;
+      if (!drop) keep.push(bytes.subarray(o, Math.min(next, bytes.length)));
+      o = next;
+    }
+    if (!fmt || !data) return null;
+    const chunk = (id, body) => { const h = new Uint8Array(8); for (let i = 0; i < 4; i++) h[i] = id.charCodeAt(i); new DataView(h.buffer).setUint32(4, body.length, true); return body.length & 1 ? [h, body, new Uint8Array(1)] : [h, body]; };
+    const info = buildInfoList(tags);
+    const extra = [];
+    if (info) { const b = concatBytes([new Uint8Array([0x49, 0x4e, 0x46, 0x4f]), ...info.subs.map((s) => concatBytes([new Uint8Array([...latin1(s.id), s.bytes.length & 0xff, (s.bytes.length >>> 8) & 0xff, (s.bytes.length >>> 16) & 0xff, s.bytes.length >>> 24]), new Uint8Array(s.bytes)]))]); extra.push(...chunk('LIST', b)); }
+    extra.push(...chunk('id3 ', buildId3v2(tags)));
+    const body = concatBytes([...keep, ...extra]);
+    const head = new Uint8Array(12); head.set([0x52, 0x49, 0x46, 0x46]); new DataView(head.buffer).setUint32(4, 4 + body.length, true); head.set([0x57, 0x41, 0x56, 0x45], 8);
+    return concatBytes([head, body]);
+  }
+  return null;
 }
 
 export function buildM3u(fileNames, titles, secs, albumTitle = 'Album') {

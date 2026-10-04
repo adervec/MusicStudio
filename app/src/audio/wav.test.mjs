@@ -349,6 +349,58 @@ import { bufToB64, b64ToBuf } from '../state/db.js';
   assert.deepEqual(merged.map(musicModelFor), ['music_v2_5', 'music_v1', 'music_v2_5'], 'album.json edits never pin/downgrade; the app pin survives');
 }
 
+// File-tag sync: retagging replaces tags and never the audio; fingerprints move only on tag/audio changes.
+{
+  const { retagBytes } = await import('./wav.js');
+  const { masterTargets, publishTargets, publishState } = await import('../backup/publish.js');
+  const audio = new Uint8Array([0xff, 0xfb, 0x90, 0x64, 1, 2, 3, 4, 5, 6, 7, 8]);
+  const id3v1 = new Uint8Array(128); id3v1.set([0x54, 0x41, 0x47]);
+  const tagged = (t) => buildId3v2(t);
+  // MP3 that already had TWO ID3v2 tags (old double-publish) + an ID3v1 footer.
+  const mp3 = new Uint8Array([...tagged({ title: 'old' }), ...tagged({ title: 'older' }), ...audio, ...id3v1]);
+  const out = retagBytes(mp3, 'mp3', { title: 'Neon Rain', album: 'Neon', track: 3, trackTotal: 9 });
+  const head = buildId3v2({ title: 'Neon Rain', album: 'Neon', track: 3, trackTotal: 9 });
+  assert.deepEqual([...out.slice(head.length)], [...audio], 'mp3: all old tags gone, audio byte-identical');
+  assert.deepEqual([...retagBytes(out, 'mp3', { title: 'X' }).slice(buildId3v2({ title: 'X' }).length)], [...audio], 'mp3: retag is idempotent');
+  // Unicode titles survive (UTF-16 frame) — Croatian names.
+  const u = buildId3v2({ title: 'Čežnja' });
+  assert.equal(u[10 + 10], 0x01, 'non-latin1 text uses UTF-16');
+  // WAV: INFO + id3 chunks replaced, fmt/data untouched, RIFF size consistent.
+  const L = new Float32Array([0, 0.5, -0.5, 0.25]);
+  const wav = encodeWav([L, L], 44100, { title: 'old title', album: 'old' });
+  const w2 = retagBytes(wav, 'wav', { title: 'New', album: 'Neon', artist: 'Me', track: 1, trackTotal: 2 });
+  const s4 = (b, o) => String.fromCharCode(...b.slice(o, o + 4));
+  const chunks = (b) => { const dv = new DataView(b.buffer, b.byteOffset); const out = []; for (let o = 12; o + 8 <= b.length; ) { const id = s4(b, o), n = dv.getUint32(o + 4, true); out.push([id, b.slice(o + 8, o + 8 + n)]); o += 8 + n + (n & 1); } return out; };
+  const c2 = chunks(w2);
+  assert.deepEqual(c2.map((c) => c[0]), ['fmt ', 'data', 'LIST', 'id3 ']);
+  assert.deepEqual([...c2[1][1]], [...chunks(wav)[1][1]], 'wav: PCM data byte-identical');
+  assert.equal(new DataView(w2.buffer).getUint32(4, true), w2.length - 8, 'wav: RIFF size fixed up');
+  const info = new TextDecoder('latin1').decode(c2[2][1]);
+  assert.ok(info.startsWith('INFO') && info.includes('New') && info.includes('Neon') && !info.includes('old title'));
+  assert.equal(chunks(retagBytes(w2, 'wav', { title: 'Again' })).filter((c) => c[0] === 'LIST').length, 1, 'wav: never stacks INFO lists');
+  const wu = new TextDecoder('latin1').decode(chunks(retagBytes(wav, 'wav', { title: 'Čežnja Đurđa' })).find((c) => c[0] === 'LIST')[1]);
+  assert.ok(wu.includes('Ceznja Durda'), 'wav INFO: accents dropped (Windows reads Latin-1), not "?"');
+  assert.ok(String.fromCharCode(...buildId3v2({ comment: 'hi' })).includes('COMM'), 'comment goes in COMM (Explorer "Comments")');
+  assert.equal(retagBytes(new Uint8Array([1, 2, 3]), 'wav', {}), null, 'unparseable → left alone');
+  assert.equal(retagBytes(audio, 'flac', {}), null, 'unsupported format → left alone');
+
+  const proj = { id: 'p', title: 'Neon', artist: 'Me', meta: { genre: 'Synth' }, tracks: [
+    { id: 'g', type: 'music', title: 'Gap', prompt: 'x' },
+    { id: 'a', type: 'music', title: 'Rain', prompt: 'p', clipId: 'c1', sizeBytes: 10, backupFile: 'Rain_ab1c2.mp3', fileName: 'Rain_ab1c2.mp3' }] };
+  const m0 = masterTargets(proj);
+  assert.deepEqual(m0.map((m) => [m.trackId, m.tags.track, m.tags.trackTotal]), [['a', 2, 2]], 'master numbering = album position');
+  const pt = publishTargets(proj);
+  assert.deepEqual(pt.files.map((f) => [f.name, f.tags.track]), [['1 Rain.mp3', 1]], 'published numbering = ready files');
+  const prompted = { ...proj, tracks: proj.tracks.map((t) => (t.id === 'a' ? { ...t, prompt: 'changed' } : t)) };
+  assert.equal(masterTargets(prompted)[0].sig, m0[0].sig, 'prompt edits never rewrite files');
+  assert.notEqual(masterTargets({ ...proj, meta: { genre: 'Ambient' } })[0].sig, m0[0].sig, 'metadata edits do');
+  assert.notEqual(masterTargets({ ...proj, cover: { id: 'cv' } })[0].sig, m0[0].sig, 'a new cover does');
+  const edited = { ...proj, tracks: proj.tracks.map((t) => (t.id === 'a' ? { ...t, fadeInMs: 500 } : t)) };
+  const pe = publishTargets(edited).files[0];
+  assert.equal(pe.ext, 'wav'); assert.notEqual(pe.audio, pt.files[0].audio, 'edits change the audio key (re-render, not retag)');
+  assert.deepEqual(publishState(proj).names, ['1 Rain.mp3']);
+}
+
 // Markdown preview: escapes HTML first (no injection), renders the safe subset, refuses non-http links.
 {
   const { renderMarkdown } = await import('../album/markdown.js');
