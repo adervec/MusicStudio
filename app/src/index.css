@@ -125,13 +125,35 @@ th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line
 .wiz-list { overflow-y: auto; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
 .wiz-list td, .wiz-list th { vertical-align: top; padding: 4px; }
 
-/* Attachment preview (album notes etc.) */
-.att-preview { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin-top: 6px; max-height: 420px; overflow: auto; font-size: 13px; white-space: pre-wrap; }
-.att-preview.md { white-space: normal; line-height: 1.55; }
-.att-preview.md h1, .att-preview.md h2, .att-preview.md h3 { margin: .6em 0 .3em; font-size: 1.1em; }
-.att-preview.md h1 { font-size: 1.3em; }
-.att-preview.md p, .att-preview.md ul, .att-preview.md ol { margin: .4em 0; }
-.att-preview.md code { background: var(--panel2); padding: 0 4px; border-radius: 4px; }
-.att-preview.md pre { background: var(--panel2); padding: 8px; border-radius: 6px; overflow: auto; }
-.att-preview.md blockquote { margin: .4em 0; padding-left: 10px; border-left: 3px solid var(--line); color: var(--dim); }
-.att-preview.md a { color: var(--accent); }
+/* Attachment preview — a card with a toolbar; HTML/PDF in a resizable frame */
+.att-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; margin-top: 8px; overflow: hidden; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+.att-card:fullscreen { display: flex; flex-direction: column; border-radius: 0; }
+.att-card:fullscreen .att-body { flex: 1; max-height: none; height: auto; resize: none; }
+.att-bar { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: var(--panel2); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.att-name { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 50%; }
+.att-seg { display: inline-flex; }
+.att-seg button { border-radius: 0; }
+.att-seg button:first-child { border-radius: 7px 0 0 7px; }
+.att-seg button:last-child { border-radius: 0 7px 7px 0; margin-left: -1px; }
+.att-body { max-height: 560px; overflow: auto; resize: vertical; }
+.att-frame { display: block; width: 100%; height: 560px; border: 0; background: #fff; }
+.att-code { margin: 0; padding: 12px 14px; font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; background: var(--bg); }
+.att-media { display: flex; justify-content: center; background: repeating-conic-gradient(var(--panel2) 0 25%, var(--bg) 0 50%) 0 0 / 20px 20px; padding: 10px; }
+.att-media img, .att-media video { max-width: 100%; max-height: 540px; border-radius: 6px; }
+.att-card:fullscreen .att-media img, .att-card:fullscreen .att-media video { max-height: 100%; }
+.att-table { padding: 0; }
+.att-table th { position: sticky; top: 0; background: var(--panel2); }
+.att-table tr:nth-child(even) td { background: color-mix(in srgb, var(--panel2) 40%, transparent); }
+.att-md { padding: 18px 26px; line-height: 1.65; font-size: 14px; max-width: 820px; }
+.att-md h1, .att-md h2, .att-md h3, .att-md h4 { margin: 1.1em 0 .4em; line-height: 1.25; }
+.att-md h1 { font-size: 1.6em; border-bottom: 1px solid var(--line); padding-bottom: .3em; margin-top: .2em; }
+.att-md h2 { font-size: 1.3em; border-bottom: 1px solid var(--line); padding-bottom: .2em; }
+.att-md h3 { font-size: 1.1em; }
+.att-md p, .att-md ul, .att-md ol { margin: .55em 0; }
+.att-md li { margin: .2em 0; }
+.att-md code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-size: .9em; }
+.att-md pre { background: var(--bg); border: 1px solid var(--line); padding: 10px 12px; border-radius: 8px; overflow: auto; }
+.att-md pre code { background: none; padding: 0; }
+.att-md blockquote { margin: .6em 0; padding: .2em 12px; border-left: 3px solid var(--accent); color: var(--dim); background: var(--panel2); border-radius: 0 6px 6px 0; }
+.att-md hr { border: 0; border-top: 1px solid var(--line); margin: 1.2em 0; }
+.att-md a { color: var(--accent); }

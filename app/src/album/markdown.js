@@ -33,3 +33,19 @@ export function renderMarkdown(src) {
   flush();
   return out.join('\n');
 }
+
+// CSV/TSV → rows of cells. Handles quoted fields with commas, newlines and "" escapes.
+export function parseCsv(text, sep = ',') {
+  const rows = []; let row = [], cell = '', q = false;
+  const s = String(text || '').replace(/\r\n?/g, '\n');
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (q) { if (c === '"') { if (s[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+    else if (c === '"') q = true;
+    else if (c === sep) { row.push(cell); cell = ''; }
+    else if (c === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += c;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}

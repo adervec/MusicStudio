@@ -338,6 +338,9 @@ import { bufToB64, b64ToBuf } from '../state/db.js';
     assert.ok(html.includes(frag), 'markdown: ' + frag);
   assert.ok(!html.includes('<script') && !html.includes('href="javascript'), 'markdown never emits live script or js: links');
   assert.ok(renderMarkdown('snake_case_name').includes('snake_case_name'), 'underscores inside words stay literal');
+  const { parseCsv } = await import('../album/markdown.js');
+  assert.deepEqual(parseCsv('a,b\n"x, y","say ""hi"""\r\n"multi\nline",2\n'), [['a', 'b'], ['x, y', 'say "hi"'], ['multi\nline', '2']]);
+  assert.deepEqual(parseCsv('a\tb\n1\t2', '\t'), [['a', 'b'], ['1', '2']]);
 }
 
 console.log('ok — wav/pricing/skeleton/path/import/edits/gaps/playlists/backup/paste/sync/catalog/library/markdown self-check passed');
