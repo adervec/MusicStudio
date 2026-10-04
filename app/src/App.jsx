@@ -21,7 +21,7 @@ import PlaylistView from './components/PlaylistView.jsx';
 import BuildAlbum from './components/BuildAlbum.jsx';
 import Reorganize from './components/Reorganize.jsx';
 import Library from './components/Library.jsx';
-import { ensureGroupPath } from './album/library.js';
+import { ensureGroupPath, pairItems } from './album/library.js';
 import DeviceSync from './components/DeviceSync.jsx';
 import CloudLibrary from './components/CloudLibrary.jsx';
 import { driveConnect, driveDisconnect, driveConnected, driveProfile, driveUploadJson, driveDownloadJson, driveStat, driveClientId, CATALOG_FILE, REQUEST_FILE } from './cloud/drive.js';
@@ -212,18 +212,54 @@ export default function App() {
       const recovered = (backfilled.tracks || []).filter((t) => t.clipId && !prevById.get(t.id)?.clipId).length;
       const referenced = new Set();
       for (const t of backfilled.tracks || []) { if (t.backupFile) referenced.add(t.backupFile); if (t.importFile) referenced.add(t.importFile); }
+      const loose = (await listFiles(dir, base)).filter((name) => AUDIO_RE.test(name) && !referenced.has(name) && name !== p.cover?.file);
+      // A loose file named like a gap track (e.g. "03 Neon Rain.mp3" ↔ "Neon Rain") is that track's audio.
+      const gaps = (backfilled.tracks || []).filter((t) => !t.clipId);
+      const matched = new Map(); // trackId → filename
+      pairItems(gaps.map((t) => ({ title: t.title, prompt: '-' })), loose.map((name) => ({ name }))).slice(0, gaps.length)
+        .forEach((r, i) => { if (r.file) matched.set(gaps[i].id, r.file.name); });
+      const linked = [];
+      for (const t of backfilled.tracks || []) {
+        const name = matched.get(t.id);
+        if (!name) { linked.push(t); continue; }
+        const blob = await readBlobFrom(dir, `${base}/${name}`);
+        const clipId = uid('clip_'); await putClip(clipId, blob);
+        linked.push({ ...t, clipId, durationMs: await clipDurationMs(blob), sizeBytes: blob.size, mime: blob.type, status: 'ready', error: '', backupFile: name });
+      }
+      const taken = new Set(matched.values());
       const newTracks = [];
-      for (const name of await listFiles(dir, base)) {
-        if (!AUDIO_RE.test(name) || referenced.has(name) || name === p.cover?.file) continue;
+      for (const name of loose) {
+        if (taken.has(name)) continue;
         const blob = await readBlobFrom(dir, `${base}/${name}`);
         const clipId = uid('clip_'); await putClip(clipId, blob);
         newTracks.push({ id: uid('t_'), type: 'upload', title: name.replace(/\.[^.]+$/, ''), fileName: name, backupFile: name, clipId, durationMs: await clipDurationMs(blob), sizeBytes: blob.size, mime: blob.type, status: 'ready', gain: 1 });
       }
-      const final = { ...backfilled, tracks: [...(backfilled.tracks || []), ...newTracks] };
+      const final = { ...backfilled, tracks: [...linked, ...newTracks] };
       updateProject(() => final);
       writeSkeleton(final);
-      showToast(`🔎 Scan: ${recovered} recovered, ${newTracks.length} new file${newTracks.length === 1 ? '' : 's'}`);
+      showToast(`🔎 Scan: ${recovered} recovered, ${matched.size} linked by title, ${newTracks.length} new file${newTracks.length === 1 ? '' : 's'}`);
     } catch (e) { showToast('Scan failed: ' + (e.message || e)); }
+  }
+
+  // Point a track at audio that already exists — a file in the album folder (used in place) or one
+  // picked from disk (copied into the folder). Fixes a missing/wrong link without regenerating.
+  async function listAlbumAudio() {
+    const p = activeRef.current; if (!p || !dir || !(await ensureWritable(dir))) return [];
+    const used = new Set((p.tracks || []).filter((t) => t.clipId).map((t) => t.backupFile).filter(Boolean));
+    return (await listFiles(dir, albumPath(p))).filter((n) => AUDIO_RE.test(n)).map((name) => ({ name, used: used.has(name) }));
+  }
+  async function linkTrackFile(trackId, src) {
+    const p = activeRef.current; const t = p?.tracks?.find((x) => x.id === trackId); if (!t) return;
+    try {
+      const inFolder = typeof src === 'string';
+      const blob = inFolder ? await readBlobFrom(dir, `${albumPath(p)}/${src}`) : src;
+      const clipId = uid('clip_'); await putClip(clipId, blob); // ponytail: the old clip (if any) is left in the store — it may be shared by a duplicate track
+      const up = { clipId, durationMs: await clipDurationMs(blob), sizeBytes: blob.size, mime: blob.type, status: 'ready', error: '', backupFile: inFolder ? src : null, importFile: undefined };
+      if (!inFolder) up.backupFile = await backupClip({ ...t, ...up }, blob);
+      updateProject((pp) => ({ ...pp, tracks: pp.tracks.map((x) => (x.id === trackId ? { ...x, ...up } : x)) }));
+      writeSkeleton();
+      showToast(`📎 “${t.title || 'Track'}” → ${inFolder ? src : src.name}`);
+    } catch (e) { showToast('Link failed: ' + (e.message || e)); }
   }
 
   const loadSkeleton = useCallback(async () => {
@@ -742,7 +778,7 @@ export default function App() {
                 group={groups.find((g) => g.id === active.parentId)} onTheme={setGroupTheme} coverUrl={coverUrl}
                 updateProject={updateProject} backupClip={backupClip} writeSkeleton={writeSkeleton}
                 onSetCover={setCover} onClearCover={clearCover} onDuplicateAlbum={() => duplicateAlbum(active)} onCopyPath={() => copyAlbumPath(active)}
-                onExport={() => setModal('export')} onMetadata={() => setModal('metadata')} onAttachments={() => setModal('attachments')} onLoadSkeleton={loadSkeleton} onScanFolder={scanAlbumFolder}
+                onExport={() => setModal('export')} onMetadata={() => setModal('metadata')} onAttachments={() => setModal('attachments')} onLoadSkeleton={loadSkeleton} onScanFolder={scanAlbumFolder} onListAlbumAudio={listAlbumAudio} onLinkFile={linkTrackFile}
                 playlists={playlists} onAddToPlaylist={addTracksToPlaylist} onPublish={() => publishOne(active)} publishName={pubDir?.name} />
             : <div className="empty" style={{ marginTop: 40 }}>Select an album on the left, or create one.<br />{!apiKey && 'Add your ElevenLabs API key in Settings, and '}set a backup folder (outside the app) before generating.</div>}
         </div>

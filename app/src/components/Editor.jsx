@@ -1,4 +1,4 @@
-import { safeUrl } from '../album/library.js';
+import { safeUrl, normTitle } from '../album/library.js';
 import { useState } from 'react';
 import { uid, putClip, getClip, deleteClip } from '../state/db.js';
 import { composeMusic, tts, MUSIC_MODELS, TTS_MODELS } from '../api/elevenlabs.js';
@@ -20,7 +20,7 @@ const STYLE_PRESETS = [
 ];
 // The album builder: curate prompts, generate music, splice dialog / uploads, reorder, edit
 // (trim/fade/volume), and preview. `updateProject((prev)=>next)` persists.
-export default function Editor({ project, apiKey, prefs, voices, backupReady, group, onTheme, coverUrl, updateProject, backupClip, writeSkeleton, onSetCover, onClearCover, onDuplicateAlbum, onCopyPath, onExport, onMetadata, onAttachments, onLoadSkeleton, onScanFolder, playlists, onAddToPlaylist, onPublish, publishName }) {
+export default function Editor({ project, apiKey, prefs, voices, backupReady, group, onTheme, coverUrl, updateProject, backupClip, writeSkeleton, onSetCover, onClearCover, onDuplicateAlbum, onCopyPath, onExport, onMetadata, onAttachments, onLoadSkeleton, onScanFolder, onListAlbumAudio, onLinkFile, playlists, onAddToPlaylist, onPublish, publishName }) {
   const tracks = project.tracks || [];
   const player = usePlayer();
   const [openEdit, setOpenEdit] = useState(() => new Set());
@@ -32,6 +32,16 @@ export default function Editor({ project, apiKey, prefs, voices, backupReady, gr
     setSel(new Set());
   }
   const staticPlaylists = (playlists || []).filter((p) => p.kind === 'static');
+  // 📎 Link file: one track at a time; the album folder's audio, best title match first.
+  const [linking, setLinking] = useState(null); // { id, files: null (loading) | [{ name, used, match }] }
+  async function startLink(t) {
+    setLinking({ id: t.id, files: null });
+    const key = normTitle(t.title);
+    const files = (await onListAlbumAudio()).map((f) => { const n = normTitle(f.name); return { ...f, match: !!key && (n === key || (Math.min(n.length, key.length) >= 3 && (n.includes(key) || key.includes(n)))) }; })
+      .sort((a, b) => (b.match - a.match) || (a.used - b.used) || a.name.localeCompare(b.name, undefined, { numeric: true }));
+    setLinking((l) => (l?.id === t.id ? { id: t.id, files } : l));
+  }
+  async function doLink(t, src) { setLinking(null); if (player.playing === t.id) player.stop(); await onLinkFile(t.id, src); }
 
   const setTracks = (fn) => updateProject((p) => ({ ...p, tracks: fn(p.tracks || []) }));
   const patch = (id, up) => setTracks((ts) => ts.map((t) => (t.id === id ? { ...t, ...up } : t)));
@@ -268,6 +278,7 @@ export default function Editor({ project, apiKey, prefs, voices, backupReady, gr
                 {t.status === 'gen' ? '… generating' : t.clipId ? '↻ Regenerate' : '✦ Generate'}
               </button>
             )}
+            <button className="mini" onClick={() => (linking?.id === t.id ? setLinking(null) : startLink(t))} title="Use an audio file that already exists — from this album's folder or your computer. No regeneration, no spend.">📎 {t.clipId ? 'Relink' : 'Link file'}</button>
             <span className={`status ${t.status === 'error' ? 'err' : ''}`}>
               {t.status === 'gen' ? 'Calling ElevenLabs…' : t.status === 'error' ? '⚠ ' + t.error : t.clipId ? '✓ ready' : ''}
             </span>
@@ -276,6 +287,20 @@ export default function Editor({ project, apiKey, prefs, voices, backupReady, gr
             {safeUrl(t.sourceUrl) && <a href={safeUrl(t.sourceUrl)} target="_blank" rel="noopener noreferrer" title="Open the page this song was generated on">↗</a>}
             {t.clipId && <span className="gain">vol <input type="range" min="0" max="1.5" step="0.05" value={t.gain ?? 1} onChange={(e) => patch(t.id, { gain: +e.target.value })} />{Math.round((t.gain ?? 1) * 100)}%</span>}
           </div>
+
+          {linking?.id === t.id && (
+            <div className="row" style={{ marginTop: 6, flexWrap: 'wrap' }}>
+              {backupReady && (
+                <select value="" onChange={(e) => e.target.value && doLink(t, e.target.value)} className="grow" style={{ minWidth: 220 }}>
+                  <option value="">{linking.files === null ? 'Reading the album folder…' : linking.files.length ? `Pick a file in this album's folder (${linking.files.length})…` : 'No audio files in this album’s folder'}</option>
+                  {(linking.files || []).map((f) => <option key={f.name} value={f.name}>{f.match ? '★ ' : ''}{f.used ? '(in use) ' : ''}{f.name}</option>)}
+                </select>
+              )}
+              <button className="mini" onClick={() => pickFile('audio/*').then((fs) => fs[0] && doLink(t, fs[0]))}>From computer…</button>
+              <button className="mini" onClick={() => setLinking(null)}>Cancel</button>
+              <span className="dim" style={{ fontSize: 11 }}>★ = name matches this track</span>
+            </div>
+          )}
 
           {t.clipId && openEdit.has(t.id) && (
             <div className="row" style={{ marginTop: 8, gap: 12, flexWrap: 'wrap', fontSize: 11, color: 'var(--dim)' }}>
