@@ -330,4 +330,14 @@ import { bufToB64, b64ToBuf } from '../state/db.js';
   assert.equal(L.libraryRows([{ ...sk, tracks: [{ ...sk.tracks[0], sourceUrl: 'javascript:x' }] }])[0].url, '', 'unsafe links never reach the table');
 }
 
-console.log('ok — wav/pricing/skeleton/path/import/edits/gaps/playlists/backup/paste/sync/catalog/library self-check passed');
+// Markdown preview: escapes HTML first (no injection), renders the safe subset, refuses non-http links.
+{
+  const { renderMarkdown } = await import('../album/markdown.js');
+  const html = renderMarkdown('# Notes\n\nSome **bold** and *it* `x<y`\n\n- one\n- two\n\n1. a\n\n> quote\n\n[ok](https://e.io) [bad](javascript:alert(1))\n\n```\n<b>raw</b>\n```\n<script>alert(1)</script>');
+  for (const frag of ['<h1>Notes</h1>', '<strong>bold</strong>', '<em>it</em>', '<code>x&lt;y</code>', '<ul><li>one</li><li>two</li></ul>', '<ol><li>a</li></ol>', '<blockquote>quote</blockquote>', '<a href="https://e.io"', '<pre><code>&lt;b&gt;raw&lt;/b&gt;</code></pre>', '&lt;script&gt;'])
+    assert.ok(html.includes(frag), 'markdown: ' + frag);
+  assert.ok(!html.includes('<script') && !html.includes('href="javascript'), 'markdown never emits live script or js: links');
+  assert.ok(renderMarkdown('snake_case_name').includes('snake_case_name'), 'underscores inside words stay literal');
+}
+
+console.log('ok — wav/pricing/skeleton/path/import/edits/gaps/playlists/backup/paste/sync/catalog/library/markdown self-check passed');

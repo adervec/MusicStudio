@@ -1,21 +1,21 @@
 import { useState } from 'react';
 import Dialog from './Dialog.jsx';
 import { pickFile } from '../backup/fs.js';
+import AttachmentPreview from './AttachmentPreview.jsx';
 
 const fmtSize = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + ' MB' : n >= 1e3 ? Math.round(n / 1e3) + ' KB' : (n || 0) + ' B');
 const icon = (a) => (a.kind === 'note' ? '📝' : '📎');
 
 // Attach reference material to an album — style guides, inspirations, notes (typed or AI-generated
 // pasted text), or uploaded files. Everything is written to the album's attachments/ folder so a
-// separate Claude Code session can read it. onAddNote/onAddFiles/onDelete persist + back up; onReadNote
-// returns a note's text; onDownload saves a file.
-export default function Attachments({ project, onAddNote, onAddFiles, onDelete, onReadNote, onDownload, onClose }) {
+// separate Claude Code session can read it. onAddNote/onAddFiles/onDelete persist + back up; previews
+// render inline (AttachmentPreview); onDownload saves a file.
+export default function Attachments({ project, onAddNote, onAddFiles, onDelete, onDownload, onClose }) {
   const list = project.attachments || [];
   const [name, setName] = useState('');
   const [text, setText] = useState('');
   const [source, setSource] = useState('hand');
   const [openId, setOpenId] = useState(null);
-  const [openText, setOpenText] = useState('');
 
   async function addNote() {
     if (!text.trim()) return;
@@ -23,11 +23,7 @@ export default function Attachments({ project, onAddNote, onAddFiles, onDelete, 
     setName(''); setText('');
   }
   async function addFiles() { const files = await pickFile('*/*'); if (files.length) await onAddFiles(files, source); }
-  async function toggle(a) {
-    if (openId === a.id) return setOpenId(null);
-    if (a.kind === 'note') { setOpenText(await onReadNote(a)); setOpenId(a.id); }
-    else onDownload(a);
-  }
+  const toggle = (a) => setOpenId((x) => (x === a.id ? null : a.id));
 
   return (
     <Dialog title="Album attachments" onClose={onClose} width={620} footer={<button className="primary" onClick={onClose}>Done</button>}>
@@ -55,10 +51,11 @@ export default function Attachments({ project, onAddNote, onAddFiles, onDelete, 
             <span className="grow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
             <span className={`badge ${a.source === 'ai' ? 'dialog' : ''}`}>{a.source === 'ai' ? 'AI' : 'hand'}</span>
             <span className="dim" style={{ fontSize: 11 }}>{fmtSize(a.size)}</span>
-            <button className="mini" onClick={() => toggle(a)}>{a.kind === 'note' ? (openId === a.id ? 'Hide' : 'View') : '⤓'}</button>
+            <button className="mini" onClick={() => toggle(a)}>{openId === a.id ? 'Hide' : 'View'}</button>
+            {a.kind !== 'note' && <button className="mini" onClick={() => onDownload(a)} title="Download">⤓</button>}
             <button className="mini danger" onClick={() => onDelete(a)}>🗑</button>
           </div>
-          {openId === a.id && a.kind === 'note' && <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12, background: 'var(--bg)', padding: 8, borderRadius: 6, marginTop: 6, maxHeight: 200, overflow: 'auto' }}>{openText}</pre>}
+          {openId === a.id && <AttachmentPreview a={a} />}
         </div>
       ))}
     </Dialog>

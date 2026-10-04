@@ -124,3 +124,14 @@ th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line
 .lib-prompt { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); }
 .wiz-list { overflow-y: auto; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
 .wiz-list td, .wiz-list th { vertical-align: top; padding: 4px; }
+
+/* Attachment preview (album notes etc.) */
+.att-preview { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin-top: 6px; max-height: 420px; overflow: auto; font-size: 13px; white-space: pre-wrap; }
+.att-preview.md { white-space: normal; line-height: 1.55; }
+.att-preview.md h1, .att-preview.md h2, .att-preview.md h3 { margin: .6em 0 .3em; font-size: 1.1em; }
+.att-preview.md h1 { font-size: 1.3em; }
+.att-preview.md p, .att-preview.md ul, .att-preview.md ol { margin: .4em 0; }
+.att-preview.md code { background: var(--panel2); padding: 0 4px; border-radius: 4px; }
+.att-preview.md pre { background: var(--panel2); padding: 8px; border-radius: 6px; overflow: auto; }
+.att-preview.md blockquote { margin: .4em 0; padding-left: 10px; border-left: 3px solid var(--line); color: var(--dim); }
+.att-preview.md a { color: var(--accent); }

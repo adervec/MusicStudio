@@ -9,10 +9,14 @@ const BASE = 'https://api.elevenlabs.io/v1';
 export function configured(key) { return !!(key && key.trim()); }
 
 export const MUSIC_MODELS = [
-  { id: 'music_v2', label: 'Music v2 — newest / best' },
-  { id: 'music_v1', label: 'Music v1' },
+  { id: 'music_v2_5', label: 'Music v2.5 — newest / best quality' },
+  { id: 'music_v2', label: 'Music v2' },
+  { id: 'music_v1', label: 'Music v1 — deprecated' },
 ];
+// Compose prompt limit, from ElevenLabs' OpenAPI spec (verified 2026-10-04).
+export const MUSIC_PROMPT_MAX = 4100;
 export const TTS_MODELS = [
+  { id: 'eleven_v3', label: 'Eleven v3 — most expressive' },
   { id: 'eleven_multilingual_v2', label: 'Multilingual v2 — best quality' },
   { id: 'eleven_turbo_v2_5', label: 'Turbo v2.5 — faster / cheaper' },
   { id: 'eleven_flash_v2_5', label: 'Flash v2.5 — fastest / cheapest' },
@@ -63,6 +67,14 @@ export async function getSubscription(apiKey) {
   const j = await r.json();
   const used = j.character_count || 0, limit = j.character_limit || 0;
   return { used, limit, remaining: Math.max(0, limit - used), tier: j.tier || '' };
+}
+
+// TTS models live from the account (new ones appear without an app update) → [{ id, label }].
+// The static TTS_MODELS above is only the offline fallback. Music has no list endpoint.
+export async function listTtsModels(apiKey) {
+  const r = await fetch(`${BASE}/models`, { headers: { 'xi-api-key': (apiKey || '').trim() } });
+  if (!r.ok) throw new Error(await errorFrom(r));
+  return (await r.json()).filter((m) => m.can_do_text_to_speech).map((m) => ({ id: m.model_id, label: m.name || m.model_id }));
 }
 
 // The account's voices → [{ id, name, category }]. Throws on a bad key / network error.

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import Dialog from './Dialog.jsx';
 import { MUSIC_MODELS, TTS_MODELS, listVoices, getSubscription } from '../api/elevenlabs.js';
+// ttsModels (prop) is the account's live list; TTS_MODELS the fallback.
 import { dirPickerSupported } from '../backup/fs.js';
 
 // API key, default models/voice, and the local backup folder. Key + prefs persist on-device.
-export default function Settings({ apiKey, prefs, voices, backupName, publishName, onClose, onSave, onVoices, onPickBackup, onClearBackup, onPickPublish, onClearPublish, onManageSync, onExportData, onImportData,
+export default function Settings({ ttsModels, apiKey, prefs, voices, backupName, publishName, onClose, onSave, onVoices, onPickBackup, onClearBackup, onPickPublish, onClearPublish, onManageSync, onExportData, onImportData,
   driveOn, driveEmail, driveAvailable, cloudBusy, onConnectDrive, onDisconnectDrive, onPushCatalog }) {
   const [key, setKey] = useState(apiKey || '');
   const [p, setP] = useState(prefs);
@@ -43,7 +44,7 @@ export default function Settings({ apiKey, prefs, voices, backupName, publishNam
       <input type="number" min="3" max="600" value={p.defaultLengthSec} onChange={(e) => set('defaultLengthSec', +e.target.value)} />
       <label>Dialog (TTS) model</label>
       <select value={p.ttsModel} onChange={(e) => set('ttsModel', e.target.value)}>
-        {TTS_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+        {(ttsModels || TTS_MODELS).map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
       </select>
       <label>Default dialog voice {voices.length ? '' : '(Test the key to load voices)'}</label>
       <select value={p.defaultVoiceId || ''} onChange={(e) => set('defaultVoiceId', e.target.value)}>

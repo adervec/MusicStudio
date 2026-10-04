@@ -1,7 +1,8 @@
 import { safeUrl, normTitle } from '../album/library.js';
 import { useState } from 'react';
 import { uid, putClip, getClip, deleteClip } from '../state/db.js';
-import { composeMusic, tts, MUSIC_MODELS, TTS_MODELS } from '../api/elevenlabs.js';
+import { composeMusic, tts, MUSIC_MODELS, TTS_MODELS, MUSIC_PROMPT_MAX } from '../api/elevenlabs.js';
+import AttachmentPreview from './AttachmentPreview.jsx';
 import { clipDurationMs } from '../audio/wav.js';
 import { pickFile } from '../backup/fs.js';
 import { fmtDuration, fmtUsd, musicCost, ttsCost } from '../state/pricing.js';
@@ -20,7 +21,7 @@ const STYLE_PRESETS = [
 ];
 // The album builder: curate prompts, generate music, splice dialog / uploads, reorder, edit
 // (trim/fade/volume), and preview. `updateProject((prev)=>next)` persists.
-export default function Editor({ project, apiKey, prefs, voices, backupReady, group, onTheme, coverUrl, updateProject, backupClip, writeSkeleton, onSetCover, onClearCover, onDuplicateAlbum, onCopyPath, onExport, onMetadata, onAttachments, onLoadSkeleton, onScanFolder, onListAlbumAudio, onLinkFile, playlists, onAddToPlaylist, onPublish, publishName }) {
+export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS_MODELS, backupReady, group, onTheme, coverUrl, updateProject, backupClip, writeSkeleton, onSetCover, onClearCover, onDuplicateAlbum, onCopyPath, onExport, onMetadata, onAttachments, onLoadSkeleton, onScanFolder, onListAlbumAudio, onLinkFile, playlists, onAddToPlaylist, onPublish, publishName }) {
   const tracks = project.tracks || [];
   const player = usePlayer();
   const [openEdit, setOpenEdit] = useState(() => new Set());
@@ -31,6 +32,7 @@ export default function Editor({ project, apiKey, prefs, voices, backupReady, gr
     setTracks((ts) => ts.filter((t) => !sel.has(t.id)));
     setSel(new Set());
   }
+  const [openAtt, setOpenAtt] = useState(null); // attachment id previewed on the album page
   const staticPlaylists = (playlists || []).filter((p) => p.kind === 'static');
   // 📎 Link file: one track at a time; the album folder's audio, best title match first.
   const [linking, setLinking] = useState(null); // { id, files: null (loading) | [{ name, used, match }] }
@@ -186,6 +188,18 @@ export default function Editor({ project, apiKey, prefs, voices, backupReady, gr
         <button onClick={onScanFolder} disabled={!backupReady} title="Scan this album's folder — recover audio for gap tracks and import any loose audio files">🔎 Scan folder</button>
       </div>
 
+      {!!project.attachments?.length && (
+        <div style={{ marginBottom: 10 }}>
+          <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
+            <span className="dim" style={{ fontSize: 12 }}>Attachments:</span>
+            {project.attachments.map((a) => (
+              <button key={a.id} className={`mini${openAtt === a.id ? ' primary' : ''}`} onClick={() => setOpenAtt((x) => (x === a.id ? null : a.id))} title="Preview">{a.kind === 'note' ? '📝' : '📎'} {a.name}</button>
+            ))}
+          </div>
+          {project.attachments.filter((a) => a.id === openAtt).map((a) => <AttachmentPreview key={a.id} a={a} />)}
+        </div>
+      )}
+
       {!backupReady && <p className="note" style={{ color: 'var(--warn)' }}>⚠ Set a backup folder outside the app (Settings) — required before generating, and where the album skeleton is exposed for an external agent.</p>}
 
       <div className="row" style={{ marginBottom: 14, flexWrap: 'wrap' }}>
@@ -245,6 +259,7 @@ export default function Editor({ project, apiKey, prefs, voices, backupReady, gr
               <label>Prompt</label>
               <textarea value={t.prompt} onChange={(e) => patch(t.id, { prompt: e.target.value })} placeholder="e.g. Upbeat lo-fi hip-hop with mellow piano, warm vinyl crackle, 90 BPM" />
               <div className="row" style={{ marginTop: 4 }}>
+                <span style={{ order: 2, marginLeft: 'auto', fontSize: 11, color: (t.prompt || '').length > MUSIC_PROMPT_MAX ? 'var(--bad)' : 'var(--dim)' }} title="ElevenLabs accepts up to 4,100 characters per prompt">{(t.prompt || '').length.toLocaleString()} / {MUSIC_PROMPT_MAX.toLocaleString()} chars</span>
                 <select value="" onChange={(e) => { if (e.target.value) patch(t.id, { prompt: (t.prompt ? t.prompt.trim() + ', ' : '') + e.target.value }); }} style={{ maxWidth: 240 }} title="Append a style to the prompt">
                   <option value="">＋ add a style…</option>
                   {STYLE_PRESETS.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -266,15 +281,20 @@ export default function Editor({ project, apiKey, prefs, voices, backupReady, gr
                   <option value="">{voices.length ? '— pick a voice —' : '— test key in Settings to load voices —'}</option>
                   {voices.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
                 </select></div>
-                <div className="grow"><label>Model</label><select value={t.ttsModel} onChange={(e) => patch(t.id, { ttsModel: e.target.value })}>{TTS_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select></div>
+                <div className="grow"><label>Model</label><select value={t.ttsModel} onChange={(e) => patch(t.id, { ttsModel: e.target.value })}>{ttsModels.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select></div>
               </div>
             </>
           )}
-          {t.type === 'upload' && <p className="note">Uploaded file: {t.fileName}</p>}
+          {t.type === 'upload' && (
+            <p className="note">Uploaded file: {t.fileName}{' '}
+              <button className="mini" title="Turn this upload into a song entry: keep the audio, add the prompt it was made from"
+                onClick={() => patch(t.id, { type: 'music', prompt: '', lengthMs: Math.max(3000, Math.min(600000, Math.round((t.durationMs || 60000) / 1000) * 1000)), model: t.model || prefs.musicModel, instrumental: false })}>＋ Add prompt (make it a song)</button>
+            </p>
+          )}
 
           <div className="row" style={{ marginTop: 8, flexWrap: 'wrap' }}>
             {t.type !== 'upload' && (
-              <button className="mini" onClick={() => generate(t)} disabled={t.status === 'gen' || (t.type === 'music' ? !t.prompt.trim() : !(t.text.trim() && t.voiceId))}>
+              <button className="mini" onClick={() => generate(t)} disabled={t.status === 'gen' || (t.type === 'music' ? !t.prompt.trim() || t.prompt.length > MUSIC_PROMPT_MAX : !(t.text.trim() && t.voiceId))}>
                 {t.status === 'gen' ? '… generating' : t.clipId ? '↻ Regenerate' : '✦ Generate'}
               </button>
             )}

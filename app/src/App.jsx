@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { uid, listProjects, getProject, saveProject, deleteProject, listGroups, saveGroup, deleteGroup, listPlaylists, savePlaylist, deletePlaylist, putAttachment, getAttachment, deleteAttachment, getClip, putClip, deleteClip, getSetting, setSetting, getBackupDir, setBackupDir, clearBackupDir, getPublishDir, setPublishDir, clearPublishDir, exportAllData, importAllData } from './state/db.js';
-import { listVoices } from './api/elevenlabs.js';
+import { listVoices, listTtsModels, TTS_MODELS } from './api/elevenlabs.js';
 import { pickBackupDir, ensureWritable, writeToDir, readTextFrom, readBlobFrom, listFiles, removeFromDir, ensureDir, moveDir, removeDir, listAlbumDirs, scanAlbums, looksLikeAppFolder, download, pickFile } from './backup/fs.js';
 import { publishAlbum } from './backup/publish.js';
 import { planSync } from './backup/sync.js';
@@ -27,7 +27,7 @@ import CloudLibrary from './components/CloudLibrary.jsx';
 import { driveConnect, driveDisconnect, driveConnected, driveProfile, driveUploadJson, driveDownloadJson, driveStat, driveClientId, CATALOG_FILE, REQUEST_FILE } from './cloud/drive.js';
 import { buildCatalog, buildRequests, requestsPending } from './cloud/catalog.js';
 
-const DEFAULT_PREFS = { musicModel: 'music_v2', ttsModel: 'eleven_multilingual_v2', defaultVoiceId: '', defaultLengthSec: 60, gapMs: 800, backupPath: '', deviceName: '', driveClientId: '' };
+const DEFAULT_PREFS = { musicModel: 'music_v2_5', ttsModel: 'eleven_multilingual_v2', defaultVoiceId: '', defaultLengthSec: 60, gapMs: 800, backupPath: '', deviceName: '', driveClientId: '' };
 const extOf = (mime, fileName) => (fileName?.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase()) || (mime === 'audio/wav' ? 'wav' : mime === 'audio/mpeg' ? 'mp3' : 'mp3');
 
 export default function App() {
@@ -42,6 +42,7 @@ export default function App() {
   const [apiKey, setApiKey] = useState('');
   const [prefs, setPrefs] = useState(DEFAULT_PREFS);
   const [voices, setVoices] = useState([]);
+  const [ttsModels, setTtsModels] = useState(TTS_MODELS);
   const [dir, setDir] = useState(null);
   const [pubDir, setPubDir] = useState(null); // publish destination (e.g. phone-synced drive)
   const [syncMap, setSyncMap] = useState({}); // projectId → { on, at } — what lives on the device
@@ -116,7 +117,7 @@ export default function App() {
       setDir(h);
       setPubDir(await getPublishDir());
       setSyncMap(await getSetting('deviceSync', {}));
-      if (k) listVoices(k).then(setVoices).catch(() => {});
+      if (k) { listVoices(k).then(setVoices).catch(() => {}); listTtsModels(k).then((m) => m.length && setTtsModels(m)).catch(() => {}); }
       // Discover albums created on disk — dedupe against the lists we just loaded (state isn't set yet).
       if (h) await importFromFolder(true, { dir: h, ignored: ign, groups: gs, projects: ps });
       await ensureGrouped(h); // migrate any legacy ungrouped albums
@@ -362,7 +363,6 @@ export default function App() {
     if (dir) { try { await removeFromDir(dir, `${albumPath(activeRef.current)}/${a.file}`); } catch { /* may already be gone */ } }
     writeSkeleton();
   }
-  async function readNote(a) { return (await getAttachment(a.id))?.text || ''; }
   async function downloadAttachment(a) { const rec = await getAttachment(a.id); if (rec?.blob) download(rec.blob, a.name); }
   // Write every attachment file to a folder (used when a backup folder is first chosen).
   async function flushAttachments(p, d) {
@@ -774,7 +774,7 @@ export default function App() {
             : groupView
             ? <GroupView group={groupView} groups={groups} projects={projects} onOpenAlbum={open} onCopyPath={() => copyGroupPath(groupView)} />
             : active
-            ? <Editor project={active} apiKey={apiKey} prefs={prefs} voices={voices} backupReady={!!dir}
+            ? <Editor project={active} apiKey={apiKey} prefs={prefs} voices={voices} ttsModels={ttsModels} backupReady={!!dir}
                 group={groups.find((g) => g.id === active.parentId)} onTheme={setGroupTheme} coverUrl={coverUrl}
                 updateProject={updateProject} backupClip={backupClip} writeSkeleton={writeSkeleton}
                 onSetCover={setCover} onClearCover={clearCover} onDuplicateAlbum={() => duplicateAlbum(active)} onCopyPath={() => copyAlbumPath(active)}
@@ -785,9 +785,9 @@ export default function App() {
       </div>
 
       {modal === 'settings' && (
-        <Settings apiKey={apiKey} prefs={prefs} voices={voices} backupName={dir?.name} publishName={pubDir?.name}
+        <Settings apiKey={apiKey} prefs={prefs} voices={voices} ttsModels={ttsModels} backupName={dir?.name} publishName={pubDir?.name}
           onClose={() => setModal(null)} onVoices={setVoices}
-          onSave={async (k, p) => { await setSetting('apiKey', k); await setSetting('prefs', p); setApiKey(k); setPrefs(p); setModal(null); if (k && !voices.length) listVoices(k).then(setVoices).catch(() => {}); }}
+          onSave={async (k, p) => { await setSetting('apiKey', k); await setSetting('prefs', p); setApiKey(k); setPrefs(p); setModal(null); if (k && !voices.length) listVoices(k).then(setVoices).catch(() => {}); if (k) listTtsModels(k).then((m) => m.length && setTtsModels(m)).catch(() => {}); }}
           onPickBackup={pickBackup} onClearBackup={dropBackup} onPickPublish={pickPublish} onClearPublish={dropPublish} onManageSync={() => setModal('sync')} onExportData={exportData} onImportData={importData}
           driveOn={drive} driveEmail={driveProfile()?.email} driveAvailable={!!driveClientId(prefs)} cloudBusy={cloudBusy}
           onConnectDrive={async () => { await setSetting('driveOn', true); connectDrive(); }}
@@ -801,7 +801,7 @@ export default function App() {
       {modal === 'sync' && pubDir && <DeviceSync projects={projects} groups={groups} syncMap={syncMap} deviceName={pubDir.name} busy={syncBusy} onApply={applySync} onClose={() => setModal(null)} />}
       {modal === 'export' && active && <Export project={active} backupDir={dir} backupName={dir?.name} albumDir={albumPath(active)} gapMs={prefs.gapMs} onClose={() => setModal(null)} />}
       {modal === 'metadata' && active && <Metadata project={active} onChange={updateProject} onClose={() => { setModal(null); writeSkeleton(); }} />}
-      {modal === 'attachments' && active && <Attachments project={active} onAddNote={addNote} onAddFiles={addFiles} onDelete={removeAttachment} onReadNote={readNote} onDownload={downloadAttachment} onClose={() => setModal(null)} />}
+      {modal === 'attachments' && active && <Attachments project={active} onAddNote={addNote} onAddFiles={addFiles} onDelete={removeAttachment} onDownload={downloadAttachment} onClose={() => setModal(null)} />}
       {modal === 'import' && dir && (
         <Import ignored={ignored} onClose={() => setModal(null)}
           onScan={() => scanAlbums(dir, [])}
