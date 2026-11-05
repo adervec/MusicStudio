@@ -149,7 +149,7 @@ export async function scanAlbums(root, ignored = []) {
       else subdirs.push([name, h]);
     }
     if (albumFile) { // this folder is an album — don't descend into its internals (attachments/)
-      try { const json = JSON.parse(await (await albumFile.getFile()).text()); albums.push({ groupPath: parts.slice(0, -1), folderName: parts[parts.length - 1] || '', json }); }
+      try { const file = await albumFile.getFile(); const json = JSON.parse(await file.text()); albums.push({ groupPath: parts.slice(0, -1), folderName: parts[parts.length - 1] || '', json, modified: file.lastModified }); }
       catch { /* skip unparseable album.json */ }
       return;
     }

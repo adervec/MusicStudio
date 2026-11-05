@@ -6,7 +6,7 @@ import { publishAlbum, publishState, publishTargets, masterTargets, coverPicture
 import { planSync } from './backup/sync.js';
 import { sanitizeFilename, clipDurationMs } from './audio/wav.js';
 import { applyTheme } from './state/themes.js';
-import { buildAlbumJson, rootAgentMarkdown, mergeSkeleton, albumFolderPath, groupFolderPath, planImport } from './album/skeleton.js';
+import { buildAlbumJson, rootAgentMarkdown, mergeSkeleton, albumFolderPath, groupFolderPath, planImport, planRefresh } from './album/skeleton.js';
 import Editor from './components/Editor.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import Settings from './components/Settings.jsx';
@@ -315,7 +315,16 @@ export default function App() {
     catch (e) { if (!silent) alert('Folder scan failed: ' + (e.message || e)); return { groups: 0, albums: 0 }; }
     const curGroups = opts.groups || groups, curProjects = opts.projects || projects;
     const { newGroups, newProjects } = planImport(scan.albums, curGroups, curProjects, () => uid('g_'), () => uid('p_'));
-    if (!newGroups.length && !newProjects.length) return { groups: 0, albums: 0 };
+    // Pick up in-place edits to albums the app already knows (any album, open or not).
+    let refreshed = 0;
+    for (const { project, json } of planRefresh(scan.albums, curGroups, await listProjects())) {
+      const merged = await backfillTracks(mergeSkeleton(project, json), d);
+      if (activeRef.current?.id === project.id) { lastJsonRef.current = JSON.stringify(buildAlbumJson(merged), null, 2); updateProject(() => merged); }
+      else await saveProject(merged);
+      refreshed++;
+    }
+    if (refreshed) { await refreshProjects(); flashSynced(); }
+    if (!newGroups.length && !newProjects.length) return { groups: 0, albums: 0, refreshed };
     for (const np of newProjects) np.proj = await backfillTracks(np.proj, d); // attach pre-existing audio
     for (const g of newGroups) await saveGroup(g);
     for (const np of newProjects) await saveProject(np.proj);
@@ -324,7 +333,7 @@ export default function App() {
     await ensureGrouped(d); // discovered root-level albums must land in a group too
     await refreshGroups(); await refreshProjects();
     if (!silent) flashSynced();
-    return { groups: newGroups.length, albums: newProjects.length };
+    return { groups: newGroups.length, albums: newProjects.length, refreshed };
   }
   importRef.current = importFromFolder;
 
@@ -893,7 +902,7 @@ export default function App() {
       {modal === 'import' && dir && (
         <Import ignored={ignored} onClose={() => setModal(null)}
           onScan={() => scanAlbums(dir, [])}
-          onApply={async (ignoreArr) => { setIgnored(ignoreArr); await setSetting('ignoredFolders', ignoreArr); const r = await importFromFolder(false, { ignored: ignoreArr }); alert(`Imported ${r.groups} group(s) and ${r.albums} album(s).`); }} />
+          onApply={async (ignoreArr) => { setIgnored(ignoreArr); await setSetting('ignoredFolders', ignoreArr); const r = await importFromFolder(false, { ignored: ignoreArr }); alert(`Imported ${r.groups} group(s) and ${r.albums} album(s); updated ${r.refreshed || 0} album(s) edited on disk.`); }} />
       )}
     </>
   );

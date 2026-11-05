@@ -203,6 +203,23 @@ export function planImport(scanned, groups = [], projects = [], mkGroupId, mkPro
   return { newGroups, newProjects };
 }
 
+// Albums already in the app whose album.json was edited on disk AFTER the app last saved them (e.g. an
+// agent rewrote prompts in place) → [{ project, json }]. The file's mtime must beat the album's
+// updatedAt, so newer in-app edits that aren't on disk yet are never reverted; edits that would change
+// nothing are skipped, so the app's own writes don't loop. Pure.
+export function planRefresh(scanned, groups = [], projects = []) {
+  const out = [];
+  for (const a of scanned) {
+    const fileId = typeof a.json?.id === 'string' && a.json.id;
+    const path = [...a.groupPath, a.folderName].join('/');
+    const p = projects.find((x) => (fileId ? x.id === fileId : albumFolderPath(x, groups) === path));
+    if (!p || !(a.modified > (p.updatedAt || 0))) continue;
+    let merged; try { merged = mergeSkeleton(p, a.json); } catch { continue; }
+    if (JSON.stringify(buildAlbumJson(merged)) !== JSON.stringify(buildAlbumJson(p))) out.push({ project: p, json: a.json });
+  }
+  return out;
+}
+
 // AGENT.md — ONE general instruction file at the ROOT of the backup folder (not per album). It
 // explains the whole layout and points the agent at each album's own album.json for the brief.
 export function rootAgentMarkdown() {

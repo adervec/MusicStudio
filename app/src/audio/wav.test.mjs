@@ -401,6 +401,25 @@ import { bufToB64, b64ToBuf } from '../state/db.js';
   assert.deepEqual(publishState(proj).names, ['1 Rain.mp3']);
 }
 
+// On-disk edits to known albums: picked up when the file is newer and actually changes something.
+{
+  const { planRefresh } = await import('../album/skeleton.js');
+  const groups = [{ id: 'g', name: 'Synth', parentId: null }];
+  const p = { id: 'p1', title: 'Neon', parentId: 'g', updatedAt: 1000, tracks: [{ id: 't1', type: 'music', title: 'Rain', prompt: 'old prompt', clipId: 'c1', durationMs: 5000 }] };
+  const json = buildAlbumJson(p);
+  const edited = { ...json, tracks: json.tracks.map((t) => ({ ...t, prompt: 'new prompt from agent' })) };
+  const scan = (j, modified, extra = {}) => [{ groupPath: ['Synth'], folderName: 'Neon', json: j, modified, ...extra }];
+  const r = planRefresh(scan(edited, 2000), groups, [p]);
+  assert.equal(r.length, 1);
+  const merged = mergeSkeleton(r[0].project, r[0].json);
+  assert.equal(merged.tracks[0].prompt, 'new prompt from agent');
+  assert.equal(merged.tracks[0].clipId, 'c1', 'audio survives an in-place edit');
+  assert.equal(planRefresh(scan(edited, 900), groups, [p]).length, 0, 'older file never reverts newer in-app edits');
+  assert.equal(planRefresh(scan(json, 2000), groups, [p]).length, 0, "the app's own write (no change) is ignored");
+  const noId = { ...edited }; delete noId.id;
+  assert.equal(planRefresh(scan(noId, 2000), groups, [p]).length, 1, 'matched by folder path when album.json has no id');
+}
+
 // Markdown preview: escapes HTML first (no injection), renders the safe subset, refuses non-http links.
 {
   const { renderMarkdown } = await import('../album/markdown.js');
