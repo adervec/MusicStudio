@@ -39,3 +39,8 @@ export function fmtDuration(ms) {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
 }
+
+// Credit-pool bar helpers (topbar 💲 Spend + dashboard).
+export const poolFrac = (c) => (c?.limit ? Math.min(1, c.used / c.limit) : 0);
+export const poolColor = (c) => { const f = c.used / c.limit; return f >= 0.9 ? 'var(--bad)' : f >= 0.75 ? 'var(--warn)' : 'var(--accent)'; };
+export const poolTitle = (c) => (c?.limit ? `ElevenLabs credits: ${c.used.toLocaleString()} of ${c.limit.toLocaleString()} used (${Math.round((c.used / c.limit) * 100)}%) · ${c.remaining.toLocaleString()} left${c.resetAt ? ` · resets ${new Date(c.resetAt).toLocaleDateString()}` : ''}${c.tier ? ` · ${c.tier}` : ''}` : 'Spend dashboard');

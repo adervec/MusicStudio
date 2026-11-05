@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { uid, listProjects, getProject, saveProject, deleteProject, listGroups, saveGroup, deleteGroup, listPlaylists, savePlaylist, deletePlaylist, putAttachment, getAttachment, deleteAttachment, getClip, putClip, deleteClip, getSetting, setSetting, getBackupDir, setBackupDir, clearBackupDir, getPublishDir, setPublishDir, clearPublishDir, exportAllData, importAllData } from './state/db.js';
-import { listVoices, listTtsModels, TTS_MODELS, newTrackModel } from './api/elevenlabs.js';
+import { listVoices, listTtsModels, TTS_MODELS, newTrackModel, getSubscription } from './api/elevenlabs.js';
 import { pickBackupDir, ensureWritable, writeToDir, readTextFrom, readBlobFrom, listFiles, removeFromDir, ensureDir, moveDir, removeDir, listAlbumDirs, scanAlbums, looksLikeAppFolder, download, pickFile, canWriteQuietly } from './backup/fs.js';
 import { publishAlbum, publishState, publishTargets, masterTargets, coverPicture, retagBlob, renderTrackFile } from './backup/publish.js';
 import { planSync } from './backup/sync.js';
 import { sanitizeFilename, clipDurationMs } from './audio/wav.js';
 import { applyTheme } from './state/themes.js';
+import { poolColor, poolTitle } from './state/pricing.js';
 import { buildAlbumJson, rootAgentMarkdown, mergeSkeleton, albumFolderPath, groupFolderPath, planImport, planRefresh } from './album/skeleton.js';
 import Editor from './components/Editor.jsx';
 import Sidebar from './components/Sidebar.jsx';
@@ -43,6 +44,18 @@ export default function App() {
   const [prefs, setPrefs] = useState(DEFAULT_PREFS);
   const [voices, setVoices] = useState([]);
   const [ttsModels, setTtsModels] = useState(TTS_MODELS);
+  // ElevenLabs credit pool for the 💲 Spend bar: on key change, shortly after every generation, and every 10 min.
+  const [credits, setCredits] = useState(null);
+  useEffect(() => {
+    if (!apiKey) { setCredits(null); return; }
+    let t = null;
+    const load = () => getSubscription(apiKey).then(setCredits).catch(() => {});
+    const soon = () => { clearTimeout(t); t = setTimeout(load, 2000); };
+    load();
+    const iv = setInterval(load, 600000);
+    window.addEventListener('musicstudio:spent', soon);
+    return () => { clearTimeout(t); clearInterval(iv); window.removeEventListener('musicstudio:spent', soon); };
+  }, [apiKey]);
   const [dir, setDir] = useState(null);
   const [pubDir, setPubDir] = useState(null); // publish destination (e.g. phone-synced drive)
   const [syncMap, setSyncMap] = useState({}); // projectId → { on, at } — what lives on the device
@@ -845,7 +858,9 @@ export default function App() {
         <button onClick={() => setModal('cowork')} title="Hand your albums and prompts to an AI agent through a folder, and read its notes back">🤝 Cowork</button>
         <button onClick={() => { setShowCloud((v) => !v); setShowLibrary(false); if (!drive) connectDrive(); }} className={showCloud ? 'primary' : ''} title="Browse the desktop library published to Google Drive and choose what syncs to your phone">☁ Cloud{requests && pubDir && requestsPending(requests, 0) ? ' •' : ''}</button>
         <button onClick={() => setModal('sync')} disabled={!pubDir} title={pubDir ? `Choose which albums are synced to ${pubDir.name} (your device folder)` : 'Set a publish folder in Settings first'}>📱 Sync</button>
-        <button onClick={() => setModal('dashboard')}>💲 Spend</button>
+        <button onClick={() => setModal('dashboard')} className="spend-btn" title={poolTitle(credits)}>💲 Spend
+          {credits?.limit > 0 && <span className="pool" style={{ '--pct': `${Math.min(100, (credits.used / credits.limit) * 100)}%`, '--c': poolColor(credits) }} />}
+        </button>
         <button onClick={() => setModal('settings')}>⚙ Settings</button>
       </div>
 
@@ -891,7 +906,7 @@ export default function App() {
           onDisconnectDrive={async () => { await setSetting('driveOn', false); disconnectDrive(); }}
           onPushCatalog={async () => { setCloudBusy('Pushing…'); try { const c = await pushCatalog(); showToast(`☁ Published ${c.albums.length} albums to Drive`); } catch (e) { showToast('Push failed: ' + (e.message || e)); } setCloudBusy(''); }} />
       )}
-      {modal === 'dashboard' && <Dashboard onClose={() => setModal(null)} />}
+      {modal === 'dashboard' && <Dashboard credits={credits} onClose={() => setModal(null)} />}
       {modal === 'cowork' && <Cowork projects={projects} groups={groups} onClose={() => setModal(null)} />}
       {modal === 'build' && <BuildAlbum groups={groups} busy={wizBusy} onCreate={buildAlbum} onClose={() => setModal(null)} />}
       {modal === 'reorg' && <Reorganize groups={groups} projects={projects} busy={wizBusy} onApply={applyRearrange} onClose={() => setModal(null)} />}

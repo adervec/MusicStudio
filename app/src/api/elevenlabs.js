@@ -6,6 +6,9 @@ import { musicCost, ttsCost } from '../state/pricing.js';
 
 const BASE = 'https://api.elevenlabs.io/v1';
 
+// Tell the app credits moved so it refreshes the credit-pool bar (see App).
+const spent = () => globalThis.dispatchEvent?.(new Event('musicstudio:spent'));
+
 export function configured(key) { return !!(key && key.trim()); }
 
 export const MUSIC_MODELS = [
@@ -52,6 +55,7 @@ export async function composeMusic({ prompt, lengthMs = 60000, model = LATEST_MU
   });
   if (!r.ok) throw new Error(await errorFrom(r));
   await recordUsage({ kind: 'music', model, source: 'compose', ms: body.music_length_ms, costUsd: musicCost(body.music_length_ms) });
+  spent();
   return new Blob([await r.arrayBuffer()], { type: 'audio/mpeg' });
 }
 
@@ -65,6 +69,7 @@ export async function tts({ text, voiceId, model = 'eleven_multilingual_v2', api
   if (!r.ok) throw new Error(await errorFrom(r));
   const chars = (text || '').trim().length;
   await recordUsage({ kind: 'tts', model, source: 'dialog', chars, costUsd: ttsCost(chars) });
+  spent();
   return new Blob([await r.arrayBuffer()], { type: 'audio/mpeg' });
 }
 
@@ -74,7 +79,7 @@ export async function getSubscription(apiKey) {
   if (!r.ok) throw new Error(await errorFrom(r));
   const j = await r.json();
   const used = j.character_count || 0, limit = j.character_limit || 0;
-  return { used, limit, remaining: Math.max(0, limit - used), tier: j.tier || '' };
+  return { used, limit, remaining: Math.max(0, limit - used), tier: j.tier || '', resetAt: (j.next_character_count_reset_unix || 0) * 1000 };
 }
 
 // TTS models live from the account (new ones appear without an app update) → [{ id, label }].

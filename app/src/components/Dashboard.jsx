@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import Dialog from './Dialog.jsx';
 import { getUsage, clearUsage, getSetting, setSetting } from '../state/db.js';
-import { summarizeUsage, fmtUsd, fmtDuration } from '../state/pricing.js';
+import { summarizeUsage, fmtUsd, fmtDuration, poolFrac, poolColor, poolTitle } from '../state/pricing.js';
 import { download } from '../backup/fs.js';
 
 const fmtWhen = (ts) => new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 // Estimated spend through your own ElevenLabs key — music minutes + dialog characters — with a
 // per-day trend, per-model table, and per-call log. Mirrors Tachyread's spend dashboard.
-export default function Dashboard({ onClose }) {
+export default function Dashboard({ credits, onClose }) {
   const [entries, setEntries] = useState(null);
   const [confirm, setConfirm] = useState(false);
   const [budget, setBudget] = useState(0);
@@ -34,6 +34,14 @@ export default function Dashboard({ onClose }) {
       footer={confirm
         ? <><button className="danger" onClick={clear}>Confirm — clear history</button><button onClick={() => setConfirm(false)}>Cancel</button></>
         : <><button onClick={() => setConfirm(true)}>🗑 Clear history</button><button className="primary" onClick={onClose}>Close</button></>}>
+      {credits?.limit > 0 && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div className="row"><span className="dim">ElevenLabs credit pool{credits.tier ? ` · ${credits.tier}` : ''}</span><div className="grow" />
+            <b>{Math.round(poolFrac(credits) * 100)}% used</b></div>
+          <div className="pool-big"><div style={{ width: `${poolFrac(credits) * 100}%`, background: poolColor(credits) }} /></div>
+          <div className="dim" style={{ fontSize: 12 }}>{poolTitle(credits).replace('ElevenLabs credits: ', '')}</div>
+        </div>
+      )}
       {!s ? <p className="note">Loading…</p> : s.calls === 0 ? (
         <p className="note">No API calls yet. Generating songs and dialog with your key logs estimated spend here.</p>
       ) : (
