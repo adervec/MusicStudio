@@ -1,7 +1,7 @@
 import { safeUrl, normTitle } from '../album/library.js';
 import { useState } from 'react';
 import { uid, putClip, getClip, deleteClip } from '../state/db.js';
-import { composeMusic, tts, MUSIC_MODELS, TTS_MODELS, MUSIC_PROMPT_MAX, LATEST_MUSIC_MODEL, musicModelFor, newTrackModel } from '../api/elevenlabs.js';
+import { MUSIC_MODELS, TTS_MODELS, MUSIC_PROMPT_MAX, LATEST_MUSIC_MODEL, musicModelFor, newTrackModel } from '../api/elevenlabs.js';
 import AttachmentStrip from './AttachmentStrip.jsx';
 import { clipDurationMs } from '../audio/wav.js';
 import { pickFile } from '../backup/fs.js';
@@ -21,7 +21,7 @@ const STYLE_PRESETS = [
 ];
 // The album builder: curate prompts, generate music, splice dialog / uploads, reorder, edit
 // (trim/fade/volume), and preview. `updateProject((prev)=>next)` persists.
-export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS_MODELS, backupReady, group, onTheme, coverUrl, updateProject, backupClip, writeSkeleton, onSetCover, onClearCover, onDuplicateAlbum, onCopyPath, onExport, onMetadata, onAttachments, onLoadSkeleton, onScanFolder, onListAlbumAudio, onLinkFile, playlists, onAddToPlaylist, onPublish, publishName }) {
+export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS_MODELS, backupReady, group, onTheme, coverUrl, updateProject, backupClip, writeSkeleton, onSetCover, onClearCover, onDuplicateAlbum, onCopyPath, onExport, onMetadata, onAttachments, onLoadSkeleton, onScanFolder, onListAlbumAudio, onLinkFile, onGenerate, onUpload, queued = 0, playlists, onAddToPlaylist, onPublish, publishName }) {
   const tracks = project.tracks || [];
   const player = usePlayer();
   const [openEdit, setOpenEdit] = useState(() => new Set());
@@ -55,45 +55,8 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
     const v = voices.find((x) => x.id === prefs.defaultVoiceId);
     setTracks((ts) => [...ts, { id: uid('t_'), type: 'dialog', title: 'Dialog', text: '', voiceId: prefs.defaultVoiceId || '', voiceName: v?.name || '', ttsModel: prefs.ttsModel, status: 'idle', gain: 1 }]);
   }
-  async function addUploads() {
-    const files = await pickFile('audio/*');
-    for (const f of files) {
-      const clipId = uid('clip_');
-      await putClip(clipId, f);
-      const t = { id: uid('t_'), type: 'upload', title: f.name.replace(/\.[^.]+$/, ''), fileName: f.name, clipId, durationMs: await clipDurationMs(f), sizeBytes: f.size, mime: f.type, status: 'ready', gain: 1 };
-      setTracks((ts) => [...ts, t]);
-      const file = await backupClip(t, f);
-      if (file) patch(t.id, { backupFile: file });
-    }
-    writeSkeleton?.();
-  }
+  async function addUploads() { const files = await pickFile('audio/*'); if (files.length) onUpload(files); }
 
-  async function generate(t) {
-    if (!apiKey) { patch(t.id, { status: 'error', error: 'Set your ElevenLabs API key in Settings.' }); return null; }
-    if (!backupReady) { patch(t.id, { status: 'error', error: 'Choose a backup folder (outside the app) in Settings before generating.' }); return null; }
-    patch(t.id, { status: 'gen', error: '' });
-    try {
-      const blob = t.type === 'music'
-        ? await composeMusic({ prompt: t.prompt, lengthMs: t.lengthMs, model: musicModelFor(t), instrumental: t.instrumental, apiKey })
-        : await tts({ text: t.text, voiceId: t.voiceId, model: t.ttsModel, apiKey });
-      const clipId = t.clipId || uid('clip_');
-      await putClip(clipId, blob);
-      const durationMs = await clipDurationMs(blob);
-      const ready = { ...t, status: 'ready', clipId, durationMs, sizeBytes: blob.size, mime: blob.type, error: '' };
-      patch(t.id, { status: 'ready', clipId, durationMs, sizeBytes: blob.size, mime: blob.type, error: '' });
-      const file = await backupClip(ready, blob);
-      if (file) patch(t.id, { backupFile: file });
-      writeSkeleton?.();
-      // The maker's app portal keeps a character sheet from what its apps report. Writing and
-      // generating a track is a few minutes of creative work; amount is in units of ten minutes.
-      try {
-        const k = 'portal-activity', a = JSON.parse(localStorage.getItem(k) || '[]');
-        a.push([Math.round(Date.now() / 1000), 'MusicStudio', 'compose', 1]);
-        localStorage.setItem(k, JSON.stringify(a.slice(-2000)));
-      } catch { /* quota — ignore */ }
-      return { clipId, durationMs, sizeBytes: blob.size, mime: blob.type };
-    } catch (e) { patch(t.id, { status: 'error', error: e.message || String(e) }); return null; }
-  }
 
   async function remove(t) {
     if (player.playing === t.id) player.stop();
@@ -117,7 +80,6 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
 
   const gaps = tracks.filter(isGap);
   const dups = duplicateIds(tracks);
-  const [bulk, setBulk] = useState(null);
   // Estimated cost of filling the gaps, accounting for duplicate-reuse (a gap matching existing/earlier audio is free).
   const gapCost = (() => {
     const seen = new Set(tracks.filter((t) => t.clipId).map(trackKey).filter(Boolean));
@@ -125,31 +87,6 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
     for (const t of gaps) { const k = trackKey(t); if (k && seen.has(k)) continue; if (k) seen.add(k); c += t.type === 'music' ? musicCost(t.lengthMs || 60000) : ttsCost((t.text || '').trim().length); }
     return c;
   })();
-  // Copy an existing clip into a duplicate track instead of paying to generate the same thing again.
-  async function reuseClip(t, info) {
-    const b = await getClip(info.clipId); if (!b) return null;
-    const nid = uid('clip_'); await putClip(nid, b);
-    patch(t.id, { status: 'ready', clipId: nid, durationMs: info.durationMs || 0, sizeBytes: info.sizeBytes || 0, mime: info.mime, error: '' });
-    const file = await backupClip({ ...t, clipId: nid }, b); if (file) patch(t.id, { backupFile: file });
-    writeSkeleton?.();
-    return { clipId: nid, durationMs: info.durationMs || 0, sizeBytes: info.sizeBytes || 0, mime: info.mime };
-  }
-  async function generateAll() {
-    const list = tracks.filter(isGap);
-    if (typeof Notification !== 'undefined' && Notification.permission === 'default') { try { Notification.requestPermission(); } catch { /* */ } }
-    const byKey = new Map(); // reuse identical content (already-generated or generated earlier this run)
-    for (const x of tracks) { const k = trackKey(x); if (k && x.clipId) byKey.set(k, { clipId: x.clipId, durationMs: x.durationMs, sizeBytes: x.sizeBytes, mime: x.mime }); }
-    let ok = 0, fail = 0;
-    for (let i = 0; i < list.length; i++) {
-      const t = list[i], k = trackKey(t);
-      setBulk(`${k && byKey.has(k) ? 'Reusing' : 'Generating'} ${i + 1}/${list.length}…`);
-      const r = k && byKey.has(k) ? await reuseClip(t, byKey.get(k)) : await generate(t);
-      if (r) { ok++; if (k) byKey.set(k, r); } else fail++;
-    }
-    setBulk(null);
-    try { if (typeof Notification !== 'undefined' && Notification.permission === 'granted') new Notification('Music Studio', { body: `“${project.title || 'Album'}” — ${ok} ready${fail ? `, ${fail} failed` : ''}` }); } catch { /* */ }
-  }
-
   const totalMs = tracks.reduce((s, t) => s + (t.clipId ? t.durationMs || 0 : 0), 0);
   const readyCount = tracks.filter((t) => t.clipId).length;
 
@@ -195,7 +132,7 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
         <button onClick={addMusic}>＋ Song</button>
         <button onClick={addDialog}>＋ Dialog</button>
         <button onClick={addUploads}>⭱ Upload audio</button>
-        <button onClick={generateAll} disabled={!gaps.length || !!bulk || !backupReady} title={`Generate every track that has no audio yet — est. ${fmtUsd(gapCost)}`}>{bulk || `⚡ Generate all gaps${gaps.length ? ` (${gaps.length}, ~${fmtUsd(gapCost)})` : ''}`}</button>
+        <button onClick={() => onGenerate(gaps.map((t) => t.id))} disabled={!gaps.some((t) => t.status !== 'queued' && t.status !== 'gen') || !backupReady} title={`Queue every track that has no audio yet — est. ${fmtUsd(gapCost)}. Keeps running while you browse other albums.`}>{queued ? `⏳ ${queued} queued for this album` : `⚡ Generate all gaps${gaps.length ? ` (${gaps.length}, ~${fmtUsd(gapCost)})` : ''}`}</button>
         <div className="grow" />
         <button onClick={() => player.playQueue(tracks.filter((t) => t.clipId))} disabled={!readyCount}>▶ Play all</button>
         <button onClick={onPublish} disabled={!readyCount} title={publishName ? `Write tagged tracks + playlist to ${publishName}/` : 'Set a publish folder in Settings (e.g. a phone-synced drive)'}>⇪ Publish</button>
@@ -286,13 +223,13 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
 
           <div className="row" style={{ marginTop: 8, flexWrap: 'wrap' }}>
             {t.type !== 'upload' && (
-              <button className="mini" onClick={() => generate(t)} disabled={t.status === 'gen' || (t.type === 'music' ? !t.prompt.trim() || t.prompt.length > MUSIC_PROMPT_MAX : !(t.text.trim() && t.voiceId))}>
-                {t.status === 'gen' ? '… generating' : t.clipId ? '↻ Regenerate' : '✦ Generate'}
+              <button className="mini" onClick={() => onGenerate([t.id])} disabled={t.status === 'gen' || t.status === 'queued' || (t.type === 'music' ? !t.prompt.trim() || t.prompt.length > MUSIC_PROMPT_MAX : !(t.text.trim() && t.voiceId))}>
+                {t.status === 'gen' ? '… generating' : t.status === 'queued' ? '⏳ queued' : t.clipId ? '↻ Regenerate' : '✦ Generate'}
               </button>
             )}
             <button className="mini" onClick={() => (linking?.id === t.id ? setLinking(null) : startLink(t))} title="Use an audio file that already exists — from this album's folder or your computer. No regeneration, no spend.">📎 {t.clipId ? 'Relink' : 'Link file'}</button>
             <span className={`status ${t.status === 'error' ? 'err' : ''}`}>
-              {t.status === 'gen' ? 'Calling ElevenLabs…' : t.status === 'error' ? '⚠ ' + t.error : t.clipId ? '✓ ready' : ''}
+              {t.status === 'gen' ? 'Calling ElevenLabs…' : t.status === 'queued' ? 'Waiting in the generation queue' : t.status === 'error' ? '⚠ ' + t.error : t.clipId ? '✓ ready' : ''}
             </span>
             <div className="grow" />
             <input value={t.sourceUrl || ''} onChange={(e) => patch(t.id, { sourceUrl: e.target.value.trim() })} placeholder="🔗 song page URL (e.g. ElevenLabs)" title="The web page this song was generated on" style={{ width: 230, fontSize: 12, padding: '3px 7px' }} />

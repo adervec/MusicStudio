@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { uid, listProjects, getProject, saveProject, deleteProject, listGroups, saveGroup, deleteGroup, listPlaylists, savePlaylist, deletePlaylist, putAttachment, getAttachment, deleteAttachment, getClip, putClip, deleteClip, getSetting, setSetting, getBackupDir, setBackupDir, clearBackupDir, getPublishDir, setPublishDir, clearPublishDir, exportAllData, importAllData } from './state/db.js';
-import { listVoices, listTtsModels, TTS_MODELS, newTrackModel, getSubscription } from './api/elevenlabs.js';
+import { listVoices, listTtsModels, TTS_MODELS, newTrackModel, getSubscription, composeMusic, tts, musicModelFor } from './api/elevenlabs.js';
+import GenQueue from './components/GenQueue.jsx';
 import { pickBackupDir, ensureWritable, writeToDir, readTextFrom, readBlobFrom, listFiles, removeFromDir, ensureDir, moveDir, removeDir, listAlbumDirs, scanAlbums, looksLikeAppFolder, download, pickFile, canWriteQuietly } from './backup/fs.js';
 import { publishAlbum, publishState, publishTargets, masterTargets, coverPicture, retagBlob, renderTrackFile } from './backup/publish.js';
 import { planSync } from './backup/sync.js';
 import { sanitizeFilename, clipDurationMs } from './audio/wav.js';
 import { applyTheme } from './state/themes.js';
 import { poolColor, poolTitle } from './state/pricing.js';
-import { buildAlbumJson, rootAgentMarkdown, mergeSkeleton, albumFolderPath, groupFolderPath, planImport, planRefresh } from './album/skeleton.js';
+import { buildAlbumJson, rootAgentMarkdown, mergeSkeleton, albumFolderPath, groupFolderPath, planImport, planRefresh, trackKey } from './album/skeleton.js';
 import Editor from './components/Editor.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import Settings from './components/Settings.jsx';
@@ -138,6 +139,9 @@ export default function App() {
       // Discover albums created on disk — dedupe against the lists we just loaded (state isn't set yet).
       if (h) await importFromFolder(true, { dir: h, ignored: ign, groups: gs, projects: ps });
       await ensureGrouped(h); // migrate any legacy ungrouped albums
+      for (const p of await listProjects()) { // a reload drops the in-memory queue: un-stick its tracks
+        if ((p.tracks || []).some((t) => t.status === 'queued' || t.status === 'gen')) await saveProject({ ...p, tracks: p.tracks.map((t) => (t.status === 'queued' || t.status === 'gen' ? { ...t, status: t.clipId ? 'ready' : 'idle' } : t)) }, { keepTime: true });
+      }
       await refreshGroups(); await refreshProjects();
       // Reconnect the Drive channel silently (an existing grant only — never a popup on boot).
       if (await getSetting('driveOn', false)) driveRef.current?.({ silent: true });
@@ -193,7 +197,7 @@ export default function App() {
       if (!(await ensureWritable(d))) return;
       const jsonText = JSON.stringify(buildAlbumJson(p), null, 2);
       await writeToDir(d, `${albumPath(p)}/album.json`, new Blob([jsonText], { type: 'application/json' }));
-      lastJsonRef.current = jsonText; // so the watcher doesn't treat our own write as an external change
+      if (p.id === activeRef.current?.id) lastJsonRef.current = jsonText; // so the watcher doesn't treat our own write as an external change
       await writeToDir(d, `AGENT.md`, new Blob([rootAgentMarkdown()], { type: 'text/markdown' })); // one general file at the root
     } catch { /* best-effort */ }
   }, [dir, albumPath]);
@@ -824,6 +828,112 @@ export default function App() {
     setWizBusy('');
   }
 
+  // ── Generation queue ──────────────────────────────────────────────────────────────────────
+  // Every job names its album + track, so a result always lands in THAT album and THAT album's
+  // folder — whatever is open when it finishes (the old per-editor loop wrote into whichever album
+  // was open). One job at a time; identical content already in the album is reused, not re-bought.
+  // ponytail: in memory — a reload drops pending jobs (their tracks go back to plain gaps).
+  const [jobs, setJobs] = useState([]); // { id, projectId, trackId, album, title, state: queued|running|done|reused|error|cancelled, error }
+  const jobsRef = useRef([]);
+  const runningRef = useRef(false);
+  const setJobsBoth = (fn) => { jobsRef.current = fn(jobsRef.current); setJobs(jobsRef.current); };
+  const setJob = (id, up) => setJobsBoth((js) => js.map((j) => (j.id === id ? { ...j, ...up } : j)));
+
+  // Patch one track of any album: the open one through the editor state, others in the DB. If that
+  // album gets opened mid-write, the patch is applied to the open copy too (idempotent).
+  async function updateProjectById(projectId, fn) {
+    if (activeRef.current?.id === projectId) { updateProject(fn); return; }
+    const p = await getProject(projectId); if (!p) return;
+    await saveProject(fn(p));
+    if (activeRef.current?.id === projectId) updateProject(fn);
+    refreshProjects();
+  }
+  const patchTrack = (projectId, trackId, up) => updateProjectById(projectId, (p) => ({ ...p, tracks: (p.tracks || []).map((t) => (t.id === trackId ? { ...t, ...up } : t)) }));
+  // Uploads are pinned to the album they were started in, like generation.
+  async function uploadTracks(projectId, files) {
+    const canWrite = !!dir && (await ensureWritable(dir).catch(() => false));
+    for (const f of files) {
+      const clipId = uid('clip_'); await putClip(clipId, f);
+      const t = { id: uid('t_'), type: 'upload', title: f.name.replace(/\.[^.]+$/, ''), fileName: f.name, clipId, durationMs: await clipDurationMs(f), sizeBytes: f.size, mime: f.type, status: 'ready', gain: 1 };
+      const now = await freshProject(projectId); if (!now) return;
+      if (canWrite) {
+        const name = `${sanitizeFilename(t.title)}_${clipId.slice(-5)}.${extOf(f.type, f.name)}`;
+        try { await writeToDir(dir, `${albumFolderPath(now, groupsRef.current)}/${name}`, f); t.backupFile = name; } catch { /* stays in the browser store */ }
+      }
+      await updateProjectById(projectId, (p) => ({ ...p, tracks: [...(p.tracks || []), t] }));
+    }
+    const saved = await freshProject(projectId); if (saved) writeSkeleton(saved);
+  }
+  const freshProject = async (id) => (activeRef.current?.id === id ? activeRef.current : await getProject(id));
+
+  async function enqueue(projectId, trackIds) {
+    if (!apiKey) { showToast('Set your ElevenLabs API key in Settings first'); setModal('settings'); return; }
+    if (!dir || !(await ensureWritable(dir))) { showToast('Connect the backup folder (outside the app) before generating'); setModal('settings'); return; }
+    const p = await freshProject(projectId); if (!p) return;
+    const busy = new Set(jobsRef.current.filter((j) => j.state === 'queued' || j.state === 'running').map((j) => j.trackId));
+    const add = trackIds.filter((id) => !busy.has(id)).map((id) => ({ id: uid('j_'), projectId, trackId: id, album: p.title || 'Album', title: p.tracks.find((t) => t.id === id)?.title || 'Track', state: 'queued' }));
+    if (!add.length) return;
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default' && add.length > 1) { try { Notification.requestPermission(); } catch { /* */ } }
+    for (const j of add) await patchTrack(projectId, j.trackId, { status: 'queued', error: '' });
+    setJobsBoth((js) => [...js.filter((j) => j.state === 'queued' || j.state === 'running' || Date.now() - (j.at || 0) < 600000), ...add]);
+    runQueue();
+  }
+  async function cancelJob(job) {
+    if (job.state !== 'queued') return;
+    setJob(job.id, { state: 'cancelled', at: Date.now() });
+    await patchTrack(job.projectId, job.trackId, { status: 'idle' });
+  }
+  async function runQueue() {
+    if (runningRef.current) return;
+    runningRef.current = true;
+    let ok = 0, fail = 0;
+    try {
+      for (;;) {
+        const job = jobsRef.current.find((j) => j.state === 'queued'); if (!job) break;
+        setJob(job.id, { state: 'running' });
+        const p = await freshProject(job.projectId);
+        const t = p?.tracks?.find((x) => x.id === job.trackId);
+        if (!t) { setJob(job.id, { state: 'error', error: 'track or album was deleted', at: Date.now() }); fail++; continue; }
+        try {
+          if (!(await canWriteQuietly(dir))) throw new Error('Backup folder is locked — click the folder chip to unlock, then retry.');
+          const k = trackKey(t);
+          const twin = k && p.tracks.find((x) => x.id !== t.id && x.clipId && trackKey(x) === k);
+          let blob = twin ? await getClip(twin.clipId) : null;
+          if (!blob) {
+            await patchTrack(p.id, t.id, { status: 'gen' });
+            blob = t.type === 'music'
+              ? await composeMusic({ prompt: t.prompt, lengthMs: t.lengthMs, model: musicModelFor(t), instrumental: t.instrumental, apiKey })
+              : await tts({ text: t.text, voiceId: t.voiceId, model: t.ttsModel, apiKey });
+            try { // the maker portal's character sheet: one compose = a few minutes of creative work
+              const key = 'portal-activity', a = JSON.parse(localStorage.getItem(key) || '[]');
+              a.push([Math.round(Date.now() / 1000), 'MusicStudio', 'compose', 1]); localStorage.setItem(key, JSON.stringify(a.slice(-2000)));
+            } catch { /* quota — ignore */ }
+          }
+          const clipId = t.clipId || uid('clip_'); // a regenerate overwrites its own clip + file (same name)
+          await putClip(clipId, blob);
+          const durationMs = await clipDurationMs(blob);
+          const now = await freshProject(p.id); // path at write time — the album may have been moved meanwhile
+          if (!now) throw new Error('album was deleted');
+          const name = `${sanitizeFilename(t.title)}_${clipId.slice(-5)}.${extOf(blob.type, t.fileName)}`;
+          await writeToDir(dir, `${albumFolderPath(now, groupsRef.current)}/${name}`, blob);
+          await patchTrack(p.id, t.id, { status: 'ready', clipId, durationMs, sizeBytes: blob.size, mime: blob.type, error: '', backupFile: name });
+          const saved = await freshProject(p.id); if (saved) writeSkeleton(saved);
+          setJob(job.id, { state: twin ? 'reused' : 'done', at: Date.now() }); ok++;
+        } catch (e) {
+          await patchTrack(p.id, t.id, { status: 'error', error: e.message || String(e) });
+          setJob(job.id, { state: 'error', error: e.message || String(e), at: Date.now() }); fail++;
+        }
+      }
+    } finally {
+      runningRef.current = false;
+      if (ok + fail > 1) {
+        showToast(`✦ Generation queue done — ${ok} ready${fail ? `, ${fail} failed` : ''}`);
+        try { if (typeof Notification !== 'undefined' && Notification.permission === 'granted') new Notification('Music Studio', { body: `Generation queue done — ${ok} ready${fail ? `, ${fail} failed` : ''}` }); } catch { /* */ }
+      }
+    }
+  }
+  const activeJobs = jobs.filter((j) => j.state === 'queued' || j.state === 'running');
+
   async function exportData() {
     try { const bundle = await exportAllData(); download(new Blob([JSON.stringify(bundle)], { type: 'application/json' }), `musicstudio-backup-${new Date().toISOString().slice(0, 10)}.json`); showToast('💾 Backup downloaded'); }
     catch (e) { showToast('Backup failed: ' + (e.message || e)); }
@@ -858,6 +968,7 @@ export default function App() {
         <button onClick={() => setModal('cowork')} title="Hand your albums and prompts to an AI agent through a folder, and read its notes back">🤝 Cowork</button>
         <button onClick={() => { setShowCloud((v) => !v); setShowLibrary(false); if (!drive) connectDrive(); }} className={showCloud ? 'primary' : ''} title="Browse the desktop library published to Google Drive and choose what syncs to your phone">☁ Cloud{requests && pubDir && requestsPending(requests, 0) ? ' •' : ''}</button>
         <button onClick={() => setModal('sync')} disabled={!pubDir} title={pubDir ? `Choose which albums are synced to ${pubDir.name} (your device folder)` : 'Set a publish folder in Settings first'}>📱 Sync</button>
+        {jobs.length > 0 && <button onClick={() => setModal('queue')} className={activeJobs.length ? 'primary' : ''} title="Generation queue — runs in the background while you browse">{activeJobs.length ? `✦ Generating ${jobs.filter((j) => j.state !== 'queued' && j.state !== 'running' && j.state !== 'cancelled').length + 1}/${jobs.filter((j) => j.state !== 'cancelled').length}` : '✦ Queue'}</button>}
         <button onClick={() => setModal('dashboard')} className="spend-btn" title={poolTitle(credits)}>💲 Spend
           {credits?.limit > 0 && <span className="pool" style={{ '--pct': `${Math.min(100, (credits.used / credits.limit) * 100)}%`, '--c': poolColor(credits) }} />}
         </button>
@@ -890,7 +1001,7 @@ export default function App() {
                 group={groups.find((g) => g.id === active.parentId)} onTheme={setGroupTheme} coverUrl={coverUrl}
                 updateProject={updateProject} backupClip={backupClip} writeSkeleton={writeSkeleton}
                 onSetCover={setCover} onClearCover={clearCover} onDuplicateAlbum={() => duplicateAlbum(active)} onCopyPath={() => copyAlbumPath(active)}
-                onExport={() => setModal('export')} onMetadata={() => setModal('metadata')} onAttachments={() => { setAttGroupId(null); setModal('attachments'); }} onLoadSkeleton={loadSkeleton} onScanFolder={scanAlbumFolder} onListAlbumAudio={listAlbumAudio} onLinkFile={linkTrackFile}
+                onExport={() => setModal('export')} onMetadata={() => setModal('metadata')} onAttachments={() => { setAttGroupId(null); setModal('attachments'); }} onLoadSkeleton={loadSkeleton} onScanFolder={scanAlbumFolder} onListAlbumAudio={listAlbumAudio} onLinkFile={linkTrackFile} onGenerate={(ids) => enqueue(active.id, ids)} onUpload={(files) => uploadTracks(active.id, files)} queued={activeJobs.filter((j) => j.projectId === active.id).length}
                 playlists={playlists} onAddToPlaylist={addTracksToPlaylist} onPublish={() => publishOne(active)} publishName={pubDir?.name} />
             : <div className="empty" style={{ marginTop: 40 }}>Select an album on the left, or create one.<br />{!apiKey && 'Add your ElevenLabs API key in Settings, and '}set a backup folder (outside the app) before generating.</div>}
         </div>
@@ -906,6 +1017,7 @@ export default function App() {
           onDisconnectDrive={async () => { await setSetting('driveOn', false); disconnectDrive(); }}
           onPushCatalog={async () => { setCloudBusy('Pushing…'); try { const c = await pushCatalog(); showToast(`☁ Published ${c.albums.length} albums to Drive`); } catch (e) { showToast('Push failed: ' + (e.message || e)); } setCloudBusy(''); }} />
       )}
+      {modal === 'queue' && <GenQueue jobs={jobs} onCancel={cancelJob} onRetry={(j) => enqueue(j.projectId, [j.trackId])} onClear={() => setJobsBoth((js) => js.filter((j) => j.state === 'queued' || j.state === 'running'))} onOpenAlbum={(id) => { setModal(null); setShowLibrary(false); setShowCloud(false); open(id); }} onClose={() => setModal(null)} />}
       {modal === 'dashboard' && <Dashboard credits={credits} onClose={() => setModal(null)} />}
       {modal === 'cowork' && <Cowork projects={projects} groups={groups} onClose={() => setModal(null)} />}
       {modal === 'build' && <BuildAlbum groups={groups} busy={wizBusy} onCreate={buildAlbum} onClose={() => setModal(null)} />}
