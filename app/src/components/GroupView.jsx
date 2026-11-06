@@ -1,5 +1,4 @@
 import { usePlayer } from './usePlayer.js';
-import Transport from './Transport.jsx';
 import { fmtDuration } from '../state/pricing.js';
 import { isGap } from '../album/skeleton.js';
 import { descendantIds } from '../album/library.js';
@@ -15,7 +14,6 @@ export default function GroupView({ group, groups, projects, onOpenAlbum, onCopy
   const allReady = albums.flatMap((a) => (a.tracks || []).filter((t) => t.clipId));
   const totalMs = allReady.reduce((s, t) => s + (t.durationMs || 0), 0);
   const gaps = albums.reduce((s, a) => s + (a.tracks || []).filter(isGap).length, 0);
-  const titleOf = (id) => allReady.find((t) => t.id === id)?.title || '';
 
   return (
     <div>
@@ -28,7 +26,6 @@ export default function GroupView({ group, groups, projects, onOpenAlbum, onCopy
       </div>
       <p className="note">{albums.length} album{albums.length === 1 ? '' : 's'} · {allReady.length} song{allReady.length === 1 ? '' : 's'} · {fmtDuration(totalMs)}{gaps > 0 && <span style={{ color: 'var(--warn)' }}> · {gaps} gap{gaps === 1 ? '' : 's'}</span>} · read-only</p>
       <AttachmentStrip list={group.attachments} />
-      <Transport player={player} label={titleOf} />
 
       {!albums.length && <div className="empty">No albums in this group yet.</div>}
       {albums.map((a) => (

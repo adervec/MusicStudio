@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import Dialog from './Dialog.jsx';
+import { pickFile } from '../backup/fs.js';
 import { parsePromptBlob, groupFolderPath } from '../album/skeleton.js';
 import { pairItems, promptsFromText } from '../album/library.js';
 
@@ -31,7 +32,7 @@ export default function BuildAlbum({ groups, busy, onCreate, onClose }) {
   const prompts = useMemo(() => [...parsePromptBlob(paste), ...texts.flatMap((t) => promptsFromText(t.name, t.text, parsePromptBlob))], [paste, texts]);
 
   async function add(folder) {
-    const files = await pickFiles(folder); if (!files.length) return;
+    const files = folder ? await pickFiles(true) : await pickFile('audio/*,.txt,.md'); if (!files.length) return;
     const t = await Promise.all(files.filter((f) => TEXT_RE.test(f.name)).map(async (f) => ({ name: f.name, text: await f.text() })));
     setTexts((x) => [...x, ...t]);
     setAudio((x) => [...x, ...files.filter((f) => AUDIO_RE.test(f.name) && !x.some((y) => y.name === f.name && y.size === f.size))]);

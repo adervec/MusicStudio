@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { usePlayer } from './usePlayer.js';
-import Transport from './Transport.jsx';
 import { fmtDuration } from '../state/pricing.js';
 import { resolvePlaylist, ruleLabel, DYNAMIC_FIELDS } from '../album/playlists.js';
 
@@ -38,7 +37,6 @@ export default function PlaylistView({ playlist, projects, groups, onChange, onR
         <button className="primary" onClick={() => player.playQueue(tracks)} disabled={!tracks.length}>▶ Play all ({tracks.length})</button>
       </div>
       <p className="note">{tracks.length} song{tracks.length === 1 ? '' : 's'} · {fmtDuration(totalMs)}</p>
-      <Transport player={player} label={(id) => tracks.find((t) => t.id === id)?.title} />
 
       {playlist.kind === 'dynamic' ? (
         <div className="row" style={{ margin: '8px 0', gap: 8, flexWrap: 'wrap' }}>

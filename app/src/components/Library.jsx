@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { usePlayer } from './usePlayer.js';
-import Transport from './Transport.jsx';
 import { libraryRows, filterRows, sortRows, libraryStats, breakdown, toCsv } from '../album/library.js';
 import { groupFolderPath } from '../album/skeleton.js';
 import { fmtDuration, fmtUsd } from '../state/pricing.js';
@@ -82,7 +81,6 @@ export default function Library({ projects, groups, onOpenAlbum }) {
         </>
       )}
 
-      <Transport player={player} label={(id) => rows.find((r) => r.id === id)?.title || ''} />
 
       <div className="lib-table">
         <table>
@@ -93,7 +91,7 @@ export default function Library({ projects, groups, onOpenAlbum }) {
           <tbody>
             {rows.slice(0, MAX_ROWS).map((r) => (
               <tr key={r.albumId + r.id} className={player.playing === r.id ? 'playing' : ''}>
-                <td>{r.status === 'ready' && <button className="mini" onClick={() => player.play(r.track, ready)}>{player.playing === r.id && !player.paused ? '⏸' : '▶'}</button>}</td>
+                <td style={{ whiteSpace: 'nowrap' }}>{r.status === 'ready' && <button className="mini" onClick={() => player.enqueue([r.track])} title="Add to the end of the play queue">＋</button>}{r.status === 'ready' && <button className="mini" onClick={() => player.play(r.track, ready)}>{player.playing === r.id && !player.paused ? '⏸' : '▶'}</button>}</td>
                 <td style={{ color: 'var(--gold, #f5c451)' }}>{r.fav ? '★' : ''}</td>
                 <td>{r.title || <span className="dim">(untitled)</span>}</td>
                 <td><a href="#" onClick={(e) => { e.preventDefault(); onOpenAlbum(r.albumId); }}>{r.album}</a></td>

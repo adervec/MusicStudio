@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { uid, listProjects, getProject, saveProject, deleteProject, listGroups, saveGroup, deleteGroup, listPlaylists, savePlaylist, deletePlaylist, putAttachment, getAttachment, deleteAttachment, getClip, putClip, deleteClip, getSetting, setSetting, getBackupDir, setBackupDir, clearBackupDir, getPublishDir, setPublishDir, clearPublishDir, exportAllData, importAllData } from './state/db.js';
 import { listVoices, listTtsModels, TTS_MODELS, newTrackModel, getSubscription, composeMusic, tts, musicModelFor } from './api/elevenlabs.js';
 import GenQueue from './components/GenQueue.jsx';
-import { pickBackupDir, ensureWritable, writeToDir, readTextFrom, readBlobFrom, listFiles, removeFromDir, ensureDir, moveDir, removeDir, listAlbumDirs, scanAlbums, looksLikeAppFolder, download, pickFile, canWriteQuietly } from './backup/fs.js';
+import PlayerBar from './components/PlayerBar.jsx';
+import { pickBackupDir, ensureWritable, writeToDir, readTextFrom, readBlobFrom, listFiles, removeFromDir, ensureDir, moveDir, removeDir, listAlbumDirs, scanAlbums, looksLikeAppFolder, download, pickFile, canWriteQuietly, setPickerStart, dirAt } from './backup/fs.js';
 import { publishAlbum, publishState, publishTargets, masterTargets, coverPicture, retagBlob, renderTrackFile } from './backup/publish.js';
 import { planSync } from './backup/sync.js';
 import { sanitizeFilename, clipDurationMs } from './audio/wav.js';
@@ -29,7 +30,7 @@ import CloudLibrary from './components/CloudLibrary.jsx';
 import { driveConnect, driveDisconnect, driveConnected, driveProfile, driveUploadJson, driveDownloadJson, driveStat, driveClientId, CATALOG_FILE, REQUEST_FILE } from './cloud/drive.js';
 import { buildCatalog, buildRequests, requestsPending } from './cloud/catalog.js';
 
-const DEFAULT_PREFS = { musicModel: 'latest', ttsModel: 'eleven_multilingual_v2', defaultVoiceId: '', defaultLengthSec: 60, gapMs: 800, backupPath: '', deviceName: '', driveClientId: '' };
+const DEFAULT_PREFS = { folderHelper: false, musicModel: 'latest', ttsModel: 'eleven_multilingual_v2', defaultVoiceId: '', defaultLengthSec: 60, gapMs: 800, backupPath: '', deviceName: '', driveClientId: '' };
 const extOf = (mime, fileName) => (fileName?.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase()) || (mime === 'audio/wav' ? 'wav' : mime === 'audio/mpeg' ? 'mp3' : 'mp3');
 
 export default function App() {
@@ -478,22 +479,38 @@ export default function App() {
     }
     if (parentId) setExpanded((s) => new Set(s).add(parentId));
   }
-  // Open the folder in the OS file manager via the dev-server endpoint (needs the absolute path from
-  // Settings + running under the launcher's dev server); otherwise copy the path to the clipboard.
+  // 📂 Open a folder in File Explorer. A web page can't launch programs, so: under the local launcher
+  // the dev server opens it; otherwise the one-time folder helper (tools/folder-helper) handles a
+  // musicstudio-open: link. Both need the backup folder's absolute path (Settings) — the browser
+  // never reveals it. Without them, the path is copied.
   function showToast(msg) { setToast(msg); if (toastTimer.current) clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToast(''), 3000); }
   async function copyPath(rel) {
     const back = rel.replace(/\//g, '\\');
-    const abs = prefs.backupPath ? `${prefs.backupPath.replace(/[\\/]+$/, '')}\\${back}` : '';
-    if (abs) {
+    const abs = prefs.backupPath ? `${prefs.backupPath.replace(/[\\/]+$/, '')}${back ? '\\' + back : ''}` : '';
+    if (!abs) {
+      setModal('settings');
+      return showToast('📂 Set the backup folder’s full path in Settings once — then 📂 opens Explorer');
+    }
+    if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) {
       try {
         const r = await fetch('/__open-folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: abs }) });
         if (r.ok) return showToast('📂 Opened in Explorer');
-      } catch { /* endpoint absent (built/preview) — fall through to copy */ }
+      } catch { /* not the dev server — try the helper */ }
     }
-    const text = abs || (dir ? `${dir.name}\\${back}` : back);
-    try { await navigator.clipboard.writeText(text); showToast(abs ? '📋 Copied (couldn’t open Explorer)' : '📋 Path copied — set the full path in Settings to open Explorer'); }
-    catch { showToast('Path: ' + text); }
+    if (prefs.folderHelper) { location.href = 'musicstudio-open:' + encodeURIComponent(abs); return showToast('📂 Opening in Explorer…'); }
+    try { await navigator.clipboard.writeText(abs); } catch { /* */ }
+    showToast('📋 Path copied — install the folder helper (Settings) so 📂 opens Explorer');
   }
+  // File pickers open in the folder of what's on screen: the attachments' owner, the open album, the
+  // selected group — else the backup root.
+  useEffect(() => {
+    setPickerStart(async () => {
+      if (!dir || !(await canWriteQuietly(dir))) return null;
+      const g = (attGroupId && modal === 'attachments' ? groups.find((x) => x.id === attGroupId) : null) || (!active && groupViewId ? groups.find((x) => x.id === groupViewId) : null);
+      const rel = g ? groupFolderPath(g, groups) : active ? albumPath(active) : '';
+      return (await dirAt(dir, rel)) || dir;
+    });
+  });
   const copyAlbumPath = (p) => copyPath(albumPath(p));
   const copyGroupPath = (g) => copyPath(groupFolderPath(g, groups));
 
@@ -945,6 +962,7 @@ export default function App() {
     catch (e) { alert('Restore failed: ' + (e.message || e)); }
   }
 
+  const trackInfo = useMemo(() => { const m = new Map(); for (const p of projects) for (const t of p.tracks || []) m.set(t.id, { title: t.title, album: p.title || 'Album', albumId: p.id }); return m; }, [projects]);
   const groupView = groupViewId ? groups.find((g) => g.id === groupViewId) : null;
   const playlist = playlistId ? playlists.find((p) => p.id === playlistId) : null;
 
@@ -1017,6 +1035,7 @@ export default function App() {
           onDisconnectDrive={async () => { await setSetting('driveOn', false); disconnectDrive(); }}
           onPushCatalog={async () => { setCloudBusy('Pushing…'); try { const c = await pushCatalog(); showToast(`☁ Published ${c.albums.length} albums to Drive`); } catch (e) { showToast('Push failed: ' + (e.message || e)); } setCloudBusy(''); }} />
       )}
+      <PlayerBar info={(id) => trackInfo.get(id)} onOpenAlbum={(id) => { setShowLibrary(false); setShowCloud(false); open(id); }} />
       {modal === 'queue' && <GenQueue jobs={jobs} onCancel={cancelJob} onRetry={(j) => enqueue(j.projectId, [j.trackId])} onClear={() => setJobsBoth((js) => js.filter((j) => j.state === 'queued' || j.state === 'running'))} onOpenAlbum={(id) => { setModal(null); setShowLibrary(false); setShowCloud(false); open(id); }} onClose={() => setModal(null)} />}
       {modal === 'dashboard' && <Dashboard credits={credits} onClose={() => setModal(null)} />}
       {modal === 'cowork' && <Cowork projects={projects} groups={groups} onClose={() => setModal(null)} />}

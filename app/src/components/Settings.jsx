@@ -67,7 +67,9 @@ export default function Settings({ ttsModels, apiKey, prefs, voices, backupName,
 
       <label>Backup folder full path — enables the 📂 buttons to open File Explorer{backupName ? ` (should end in “${backupName}”)` : ''}</label>
       <input value={p.backupPath || ''} onChange={(e) => set('backupPath', e.target.value)} placeholder="C:\\Users\\you\\Music\\My Albums" spellCheck={false} />
-      <p className="note">The browser can't detect this. Paste the folder's absolute path here; then 📂 opens Explorer (when launched via the app's dev server). Otherwise 📂 copies the path.</p>
+      <p className="note">The browser can't detect this. Paste the folder's absolute path here (Explorer → click the address bar → copy).</p>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}><input type="checkbox" style={{ width: 'auto' }} checked={!!p.folderHelper} onChange={(e) => set('folderHelper', e.target.checked)} />Folder helper installed — 📂 opens File Explorer from the installed app / web version</label>
+      <p className="note">One-time, per-user, no admin: run <code>tools\folder-helper\install.cmd</code> from the Music Studio repo (undo: <code>uninstall.cmd</code>). It only opens existing folders. The first click asks Chrome's permission — tick “Always allow”. Not needed when you start the app with “Launch Music Studio.cmd”.</p>
 
       <div className="section">Publish folder (device sync)</div>
       {dirPickerSupported() ? (

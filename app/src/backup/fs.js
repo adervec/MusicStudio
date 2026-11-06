@@ -172,7 +172,38 @@ export function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-export function pickFile(accept = 'audio/*') {
+// Where file pickers open: the app registers a resolver for "the folder of what's on screen"
+// (album / group / backup root) — see App. Falls back to the browser's own default.
+let pickerStart = null;
+export function setPickerStart(fn) { pickerStart = fn; }
+const EXTS = {
+  'audio/*': ['.mp3', '.wav', '.m4a', '.aac', '.ogg', '.oga', '.opus', '.flac', '.webm'],
+  'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp'],
+  'application/json': ['.json'],
+};
+// "audio/*,.txt,.md" → showOpenFilePicker types; null = accept anything.
+function pickerTypes(accept) {
+  const parts = String(accept || '').split(',').map((x) => x.trim()).filter(Boolean);
+  if (!parts.length || parts.includes('*/*')) return null;
+  const map = {};
+  for (const p of parts) {
+    if (p.startsWith('.')) (map['application/octet-stream'] ||= []).push(p);
+    else if (EXTS[p]) map[p] = EXTS[p];
+  }
+  return Object.keys(map).length ? [{ description: 'Files', accept: map }] : null;
+}
+// Dir handle for a relative path under root (no creation); null when it doesn't exist.
+export async function dirAt(root, path) { try { let d = root; for (const p of String(path || '').split('/').filter(Boolean)) d = await d.getDirectoryHandle(p); return d; } catch { return null; } }
+
+export async function pickFile(accept = 'audio/*') {
+  if (typeof window !== 'undefined' && window.showOpenFilePicker) {
+    const startIn = await Promise.resolve(pickerStart?.()).catch(() => null);
+    const types = pickerTypes(accept);
+    try {
+      const hs = await window.showOpenFilePicker({ multiple: true, ...(startIn ? { startIn } : {}), ...(types ? { types } : {}) });
+      return await Promise.all(hs.map((h) => h.getFile()));
+    } catch (e) { if (e?.name === 'AbortError') return []; /* fall back to the plain input */ }
+  }
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file'; input.accept = accept; input.multiple = true;

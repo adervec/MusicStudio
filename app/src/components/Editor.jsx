@@ -9,7 +9,6 @@ import { fmtDuration, fmtUsd, musicCost, ttsCost } from '../state/pricing.js';
 import { THEMES } from '../state/themes.js';
 import { isGap, trackKey, duplicateIds } from '../album/skeleton.js';
 import { usePlayer } from './usePlayer.js';
-import Transport from './Transport.jsx';
 import Waveform from './Waveform.jsx';
 
 const STYLE_PRESETS = [
@@ -135,6 +134,7 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
         <button onClick={() => onGenerate(gaps.map((t) => t.id))} disabled={!gaps.some((t) => t.status !== 'queued' && t.status !== 'gen') || !backupReady} title={`Queue every track that has no audio yet — est. ${fmtUsd(gapCost)}. Keeps running while you browse other albums.`}>{queued ? `⏳ ${queued} queued for this album` : `⚡ Generate all gaps${gaps.length ? ` (${gaps.length}, ~${fmtUsd(gapCost)})` : ''}`}</button>
         <div className="grow" />
         <button onClick={() => player.playQueue(tracks.filter((t) => t.clipId))} disabled={!readyCount}>▶ Play all</button>
+        <button onClick={() => player.enqueue(tracks.filter((t) => t.clipId))} disabled={!readyCount} title="Add this album to the end of the play queue">＋♫ Queue</button>
         <button onClick={onPublish} disabled={!readyCount} title={publishName ? `Write tagged tracks + playlist to ${publishName}/` : 'Set a publish folder in Settings (e.g. a phone-synced drive)'}>⇪ Publish</button>
         <button className="primary" onClick={onExport} disabled={!readyCount}>⤓ Export album</button>
       </div>
@@ -157,7 +157,6 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
         </div>
       )}
 
-      <Transport player={player} label={(id) => tracks.find((t) => t.id === id)?.title} />
 
       {!tracks.length && <div className="empty">Add a song, dialog line, or upload to start building your album.</div>}
 
@@ -173,6 +172,7 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
             <button className="mini" onClick={() => move(t.id, -1)} disabled={i === 0} title="Move up">▲</button>
             <button className="mini" onClick={() => move(t.id, 1)} disabled={i === tracks.length - 1} title="Move down">▼</button>
             {t.clipId && <button className="mini" onClick={() => player.play(t, tracks)}>{player.playing === t.id ? (player.paused ? '▶' : '⏸') : '▶'}</button>}
+            {t.clipId && <button className="mini" onClick={() => player.enqueue([t])} title="Add to the end of the play queue">＋♫</button>}
             {t.clipId && <button className="mini" onClick={() => toggleEdit(t.id)} title="Trim / fade">✎</button>}
             <button className="mini" onClick={() => duplicateTrack(t)} title="Duplicate track">⧉</button>
             <button className="mini danger" onClick={() => remove(t)}>🗑</button>
