@@ -44,7 +44,7 @@ export default function Library({ projects, groups, onOpenAlbum }) {
       <div className="lib-filters">
         <input value={f.q} onChange={set('q')} placeholder="Search titles, albums, prompts, genres, links…" style={{ flex: 3 }} />
         <select value={f.group} onChange={set('group')}><option value="">All groups</option>{groupOpts.map((g) => <option key={g} value={g}>{g}</option>)}</select>
-        <select value={f.type} onChange={set('type')}><option value="">All types</option><option value="music">Song</option><option value="dialog">Dialog</option><option value="upload">Upload</option></select>
+        <select value={f.type} onChange={set('type')}><option value="">All types</option><option value="music">Song</option><option value="dialog">Dialog</option><option value="upload">Upload</option><option value="sfx">Sound effect</option></select>
         <select value={f.status} onChange={set('status')}><option value="">Any status</option><option value="ready">Ready</option><option value="gap">Gap (to generate)</option><option value="empty">Empty</option></select>
         <label className="row" style={{ margin: 0, whiteSpace: 'nowrap' }}><input type="checkbox" style={{ width: 'auto' }} checked={f.fav} onChange={set('fav')} /> ★ only</label>
         {filtered && <button className="mini" onClick={() => setF({ q: '', group: '', type: '', status: '', fav: false })}>Clear</button>}

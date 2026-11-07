@@ -22,9 +22,12 @@ export function chooseTake(t, takeId) {
   return { ...t, ...takeToRep(k), takes: (t.takes || []).map((x) => (x.id === takeId ? repAsTake(t) : x)).filter((x) => x.clipId) };
 }
 // Spend estimate for a set of tracks about to be queued.
-export function estimateJobs(tracks, { takes = 1, model = () => '' } = {}) {
+export function estimateJobs(tracks, { takes = 1, model = () => '', kind = '' } = {}) {
   let usd = 0, ms = 0, n = 0; const lines = [];
   for (const t of tracks) {
+    if (kind === 'stems') { n++; lines.push({ title: t.title, detail: 'stem separation · credits (price unpublished)' }); continue; }
+    if (kind === 'video') { n++; lines.push({ title: t.title, detail: `score ${t.videoCount || 1} video clip(s) · credits by length` }); continue; }
+    if (t.type === 'sfx') { n++; lines.push({ title: t.title, detail: `sound effect${t.sfxDuration ? ` · ${t.sfxDuration}s` : ''} · credits` }); continue; }
     if (t.type === 'music') {
       const k = Math.max(1, Math.min(4, t.takesN || takes)), len = t.usePlan && t.plan?.chunks?.length ? planMs(t.plan) : (t.lengthMs || 60000);
       usd += musicCost(len) * k; ms += len * k; n += k;

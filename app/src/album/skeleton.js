@@ -133,6 +133,7 @@ export function mergeSkeleton(project, json) {
 
 // A track is a "generation gap" if it's a song/dialog with the input it needs but no audio yet.
 export function isGap(t) {
+  if (t.type === 'sfx') return !t.clipId && !!(t.text && t.text.trim());
   return (t.type === 'music' || t.type === 'dialog') && !t.clipId
     && (t.type === 'music' ? !!((t.usePlan && t.plan?.chunks?.length) || (t.prompt && t.prompt.trim())) : !!(t.text && t.text.trim() && t.voiceId));
 }

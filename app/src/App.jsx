@@ -3,7 +3,9 @@ import { uid, listProjects, getProject, saveProject, deleteProject, listGroups, 
 import { listVoices, listTtsModels, TTS_MODELS, newTrackModel, getSubscription, tts, musicModelFor } from './api/elevenlabs.js';
 import GenQueue from './components/GenQueue.jsx';
 import ConfirmSpend from './components/ConfirmSpend.jsx';
-import { composeBody, composeDetailed, lrcFromWords, toChunks, planMs, uploadSong, inpaintPlan } from './api/music.js';
+import { composeBody, composeDetailed, lrcFromWords, toChunks, planMs, uploadSong, inpaintPlan, draftPlan, separateStems, soundEffect, videoToMusic, SFX_MODELS } from './api/music.js';
+import FromSong from './components/FromSong.jsx';
+import FromVideo from './components/FromVideo.jsx';
 import { qcMetrics, qcGrade } from './audio/qc.js';
 import { decodeBlob } from './audio/wav.js';
 import { takeToRep, repAsTake, estimateJobs } from './album/takes.js';
@@ -896,14 +898,14 @@ export default function App() {
     const p = await freshProject(projectId); if (!p) return;
     if (prefs.confirmSpend !== false && !opts.confirmed) {
       const items = trackIds.map((id) => p.tracks.find((t) => t.id === id)).filter(Boolean);
-      setSpendAsk({ projectId, trackIds, opts, album: p.title || 'Album', ...estimateJobs(items, { takes: prefs.takes || 1, model: musicModelFor }) });
+      setSpendAsk({ projectId, trackIds, opts, album: p.title || 'Album', ...estimateJobs(items.map((t) => ({ ...t, videoCount: opts.videos?.length })), { takes: prefs.takes || 1, model: musicModelFor, kind: opts.kind || '' }) });
       return;
     }
-    const busy = new Set(jobsRef.current.filter((j) => j.state === 'queued' || j.state === 'running').map((j) => j.trackId));
-    const add = trackIds.filter((id) => !busy.has(id)).map((id) => ({ id: uid('j_'), projectId, trackId: id, album: p.title || 'Album', title: p.tracks.find((t) => t.id === id)?.title || 'Track', state: 'queued', plan: opts.plan || null }));
+    const busy = new Set(jobsRef.current.filter((j) => (j.state === 'queued' || j.state === 'running') && (j.kind || '') === (opts.kind || '')).map((j) => j.trackId));
+    const add = trackIds.filter((id) => !busy.has(id)).map((id) => ({ id: uid('j_'), projectId, trackId: id, album: p.title || 'Album', title: p.tracks.find((t) => t.id === id)?.title || 'Track', state: 'queued', plan: opts.plan || null, kind: opts.kind || '', videos: opts.videos || null, video: opts.video || null, variation: opts.variation || '' }));
     if (!add.length) return;
     if (typeof Notification !== 'undefined' && Notification.permission === 'default' && add.length > 1) { try { Notification.requestPermission(); } catch { /* */ } }
-    for (const j of add) await patchTrack(projectId, j.trackId, { status: 'queued', error: '' });
+    if (opts.kind !== 'stems') for (const j of add) await patchTrack(projectId, j.trackId, { status: 'queued', error: '' });
     setJobsBoth((js) => [...js.filter((j) => j.state === 'queued' || j.state === 'running' || Date.now() - (j.at || 0) < 600000), ...add]);
     runQueue();
   }
@@ -929,7 +931,38 @@ export default function App() {
           const save = async (title, clipId, blob, ext = extOf(blob.type, t.fileName)) => { const name = `${sanitizeFilename(title || 'Track')}_${clipId.slice(-5)}.${ext}`; await writeToDir(dir, `${await folder()}/${name}`, blob); return name; };
           const portal = () => { try { const key = 'portal-activity', a = JSON.parse(localStorage.getItem(key) || '[]'); a.push([Math.round(Date.now() / 1000), 'MusicStudio', 'compose', 1]); localStorage.setItem(key, JSON.stringify(a.slice(-2000))); } catch { /* quota */ } };
           let twin = null;
-          if (t.type === 'music') {
+          const qcOf = async (blob, expectSec) => { try { const ab = await decodeBlob(blob); const ch = [ab.getChannelData(0), ...(ab.numberOfChannels > 1 ? [ab.getChannelData(1)] : [])]; const m = qcMetrics(ch, ab.sampleRate); return { ...qcGrade(m, expectSec), ...m }; } catch { return null; } };
+          // A new take becomes the track's audio; whatever was there is kept as a take.
+          const adopt = (take) => updateProjectById(p.id, (pp) => ({ ...pp, tracks: (pp.tracks || []).map((x) => (x.id !== t.id ? x : { ...x, ...takeToRep(take), status: 'ready', error: '', takes: [...(x.takes || []), ...(x.clipId ? [repAsTake(x)] : [])] })) }));
+          if (job.kind === 'stems') {
+            setJob(job.id, { note: 'separating stems…' });
+            const src = await getClip(t.clipId); if (!src) throw new Error('audio not found');
+            const files = await separateStems(src, job.variation || 'six_stems_v1', apiKey, t.backupFile || 'song.mp3');
+            const sub = `stems/${sanitizeFilename(t.title || 'Track')}_${(t.clipId || '').slice(-5)}`;
+            const stems = [];
+            for (const f of files) {
+              const clipId = uid('clip_'); await putClip(clipId, f.blob);
+              const file = `${sub}/${sanitizeFilename(f.name.replace(/\.[^.]+$/, ''))}.${extOf(f.blob.type, f.name)}`;
+              await writeToDir(dir, `${await folder()}/${file}`, f.blob);
+              stems.push({ name: f.name.replace(/\.[^.]+$/, ''), clipId, file, durationMs: await clipDurationMs(f.blob), mime: f.blob.type, sizeBytes: f.blob.size });
+            }
+            for (const old of t.stems || []) if (old.clipId) await deleteClip(old.clipId);
+            await patchTrack(p.id, t.id, { stems });
+          } else if (job.kind === 'video') {
+            await patchTrack(p.id, t.id, { status: 'gen' });
+            const v = job.video || {};
+            const { blob, songId } = await videoToMusic({ videos: job.videos || [], description: t.prompt || '', tags: v.tags || [], model: musicModelFor(t), addSfx: !!v.addSfx, useAudioRef: !!v.useAudioRef }, apiKey);
+            portal();
+            const clipId = uid('clip_'); await putClip(clipId, blob);
+            const durationMs = await clipDurationMs(blob);
+            await adopt({ id: uid('k_'), clipId, durationMs, sizeBytes: blob.size, mime: blob.type, backupFile: await save(t.title, clipId, blob), songId, qc: await qcOf(blob, 0), at: Date.now(), model: musicModelFor(t), meta: { title: '', description: `scored from ${(job.videos || []).map((x) => x.name).join(', ')}`, genres: [], languages: [] } });
+          } else if (t.type === 'sfx') {
+            await patchTrack(p.id, t.id, { status: 'gen' });
+            const blob = await soundEffect({ text: t.text, durationSec: t.sfxDuration || null, loop: !!t.loop, promptInfluence: t.promptInfluence ?? 0.3, model: t.sfxModel || SFX_MODELS[0].id }, apiKey);
+            portal();
+            const clipId = uid('clip_'); await putClip(clipId, blob);
+            await adopt({ id: uid('k_'), clipId, durationMs: await clipDurationMs(blob), sizeBytes: blob.size, mime: blob.type, backupFile: await save(t.title, clipId, blob), qc: await qcOf(blob, 0), at: Date.now(), model: t.sfxModel || SFX_MODELS[0].id });
+          } else if (t.type === 'music') {
             // Takes: N generations (each its own seed), quality-checked; the best becomes the track,
             // the rest — and the previous audio, if any — stack under it. Nothing is overwritten.
             const n = job.plan ? 1 : Math.max(1, Math.min(4, t.takesN || prefs.takes || 1));
@@ -943,8 +976,7 @@ export default function App() {
               portal();
               const clipId = uid('clip_'); await putClip(clipId, blob);
               const durationMs = await clipDurationMs(blob);
-              let qc = null;
-              try { const ab = await decodeBlob(blob); const ch = [ab.getChannelData(0), ...(ab.numberOfChannels > 1 ? [ab.getChannelData(1)] : [])]; const m = qcMetrics(ch, ab.sampleRate); qc = { ...qcGrade(m, (body.music_length_ms || planMs(body.composition_plan)) / 1000), ...m }; } catch { /* undecodable — no grade */ }
+              const qc = await qcOf(blob, (body.music_length_ms || planMs(body.composition_plan)) / 1000);
               const sm = meta.song_metadata || {};
               const title = (!t.title || /^Track \d+$/.test(t.title)) && sm.title ? sm.title : t.title;
               const backupFile = await save(title, clipId, blob);
@@ -971,9 +1003,9 @@ export default function App() {
             await patchTrack(p.id, t.id, { status: 'ready', clipId, durationMs, sizeBytes: blob.size, mime: blob.type, error: '', backupFile });
           }
           const saved = await freshProject(p.id); if (saved) writeSkeleton(saved);
-          setJob(job.id, { state: twin ? 'reused' : 'done', at: Date.now() }); ok++;
+          setJob(job.id, { state: twin ? 'reused' : 'done', at: Date.now(), note: '' }); ok++;
         } catch (e) {
-          await patchTrack(p.id, t.id, { status: 'error', error: e.message || String(e) });
+          if (job.kind !== 'stems') await patchTrack(p.id, t.id, { status: 'error', error: e.message || String(e) });
           setJob(job.id, { state: 'error', error: e.message || String(e), at: Date.now() }); fail++;
         }
       }
@@ -1010,6 +1042,42 @@ export default function App() {
       const plan = inpaintPlan(songId, t.durationMs, from * 1000, to * 1000, { text: text || '', positive_styles: String(styles || '').split(',').map((x) => x.trim()).filter(Boolean), negative_styles: [], context_adherence: 'high' });
       enqueue(projectId, [t.id], { plan });
     } catch (e) { showToast('Redo failed: ' + (e.message || e)); }
+  }
+  // 🎧 New tracks from an existing song's reverse-engineered plan (see FromSong).
+  async function createFromSong(o) {
+    const projectId = activeRef.current?.id; if (!projectId) return;
+    setWizBusy('Adding…');
+    try {
+      const base = o.analysis.plan || { chunks: [] };
+      const srcMs = await clipDurationMs(o.file);
+      const cond = (plan) => (o.soundAlike && plan.chunks.length ? { chunks: plan.chunks.map((c, i) => (i === 0 && !c.song_id ? { ...c, conditioning_ref: { song_id: o.analysis.songId, range: { start_ms: 0, end_ms: Math.min(srcMs || 60000, 60000) } }, condition_strength: o.strength } : c)) } : plan);
+      const name = o.file.name.replace(/\.[^.]+$/, '');
+      const mk = (title, plan) => ({ id: uid('t_'), type: 'music', title, prompt: [...new Set(plan.chunks.flatMap((c) => c.positive_styles || []))].slice(0, 12).join(', '), lyrics: o.lyrics || '', usePlan: true, plan: cond(plan), respectDurations: true, lengthMs: Math.max(3000, planMs(plan)) || 60000, ...newTrackModel(prefs), instrumental: !o.lyrics, status: 'idle', gain: 1, sourceRef: { file: o.file.name, songId: o.analysis.songId } });
+      const add = [];
+      if (o.recreate) add.push(mk(`${name} (recreated)`, base));
+      for (let k = 1; k <= (o.siblings || 0); k++) {
+        setWizBusy(`Planning sibling ${k}/${o.siblings}…`);
+        const prompt = `A new original song in the same style, instrumentation, tempo, structure and mood as the source plan, with a different melody${o.lyrics ? ' and new lyrics on a related theme' : ''}. ${o.direction || ''} Variation ${k} of ${o.siblings}: make it distinct from the others.`;
+        let plan = base;
+        try { plan = (await draftPlan({ prompt, lengthMs: planMs(base) || null, model: musicModelFor({}), source: { chunks: base.chunks.filter((c) => !c.song_id) } }, apiKey)) || base; } catch (e) { showToast('Sibling plan failed, using the source plan: ' + (e.message || e)); }
+        add.push({ ...mk(`${name} — sibling ${k}`, plan), lyrics: '' });
+      }
+      await updateProjectById(projectId, (pp) => ({ ...pp, tracks: [...(pp.tracks || []), ...add] }));
+      if (o.addOriginal) { await uploadTracks(projectId, [o.file]); }
+      const saved = await freshProject(projectId); if (saved) writeSkeleton(saved);
+      setModal(null);
+      showToast(`🎧 Added ${add.length + (o.addOriginal ? 1 : 0)} track(s) from “${name}”`);
+      if (o.generate && add.length) enqueue(projectId, add.map((t) => t.id));
+    } catch (e) { showToast('From song failed: ' + (e.message || e)); }
+    setWizBusy('');
+  }
+  // 🎬 A music track scored from video clips (videos live only in the queue job).
+  async function createFromVideo(o) {
+    const projectId = activeRef.current?.id; if (!projectId) return;
+    const t = { id: uid('t_'), type: 'music', title: o.videos[0].name.replace(/\.[^.]+$/, '') + ' (score)', prompt: [o.description, o.tags.join(', ')].filter(Boolean).join(' — '), lengthMs: 60000, ...newTrackModel(prefs), instrumental: true, status: 'idle', gain: 1 };
+    await updateProjectById(projectId, (pp) => ({ ...pp, tracks: [...(pp.tracks || []), t] }));
+    setModal(null);
+    enqueue(projectId, [t.id], { kind: 'video', videos: o.videos, video: { tags: o.tags, addSfx: o.addSfx, useAudioRef: o.useAudioRef } });
   }
   const activeJobs = jobs.filter((j) => j.state === 'queued' || j.state === 'running');
 
@@ -1081,7 +1149,7 @@ export default function App() {
                 group={groups.find((g) => g.id === active.parentId)} onTheme={setGroupTheme} coverUrl={coverUrl}
                 updateProject={updateProject} backupClip={backupClip} writeSkeleton={writeSkeleton}
                 onSetCover={setCover} onClearCover={clearCover} onDuplicateAlbum={() => duplicateAlbum(active)} onCopyPath={() => copyAlbumPath(active)}
-                onExport={() => setModal('export')} onMetadata={() => setModal('metadata')} onAttachments={() => { setAttGroupId(null); setModal('attachments'); }} onLoadSkeleton={loadSkeleton} onScanFolder={scanAlbumFolder} onListAlbumAudio={listAlbumAudio} onLinkFile={linkTrackFile} onGenerate={(ids) => enqueue(active.id, ids)} onUpload={(files) => uploadTracks(active.id, files)} onDeleteTakes={deleteTakes} onInpaint={inpaintTrack} finetunes={finetunes} queued={activeJobs.filter((j) => j.projectId === active.id).length}
+                onExport={() => setModal('export')} onMetadata={() => setModal('metadata')} onAttachments={() => { setAttGroupId(null); setModal('attachments'); }} onLoadSkeleton={loadSkeleton} onScanFolder={scanAlbumFolder} onListAlbumAudio={listAlbumAudio} onLinkFile={linkTrackFile} onGenerate={(ids) => enqueue(active.id, ids)} onUpload={(files) => uploadTracks(active.id, files)} onDeleteTakes={deleteTakes} onInpaint={inpaintTrack} finetunes={finetunes} onFromSong={() => setModal('fromSong')} onFromVideo={() => setModal('fromVideo')} onStems={(t, variation) => enqueue(active.id, [t.id], { kind: 'stems', variation })} queued={activeJobs.filter((j) => j.projectId === active.id).length}
                 playlists={playlists} onAddToPlaylist={addTracksToPlaylist} onPublish={() => publishOne(active)} publishName={pubDir?.name} />
             : <div className="empty" style={{ marginTop: 40 }}>Select an album on the left, or create one.<br />{!apiKey && 'Add your ElevenLabs API key in Settings, and '}set a backup folder (outside the app) before generating.</div>}
         </div>
@@ -1100,6 +1168,8 @@ export default function App() {
       <PlayerBar info={(id) => trackInfo.get(id)} onOpenAlbum={(id) => { setShowLibrary(false); setShowCloud(false); open(id); }} />
       {spendAsk && <ConfirmSpend ask={spendAsk} onCancel={() => setSpendAsk(null)}
         onConfirm={async (dontAsk) => { const a = spendAsk; setSpendAsk(null); if (dontAsk) { const np = { ...prefs, confirmSpend: false }; setPrefs(np); await setSetting('prefs', np); } enqueue(a.projectId, a.trackIds, { ...a.opts, confirmed: true }); }} />}
+      {modal === 'fromSong' && active && <FromSong apiKey={apiKey} busy={wizBusy} onCreate={createFromSong} onClose={() => setModal(null)} />}
+      {modal === 'fromVideo' && active && <FromVideo onCreate={createFromVideo} onClose={() => setModal(null)} />}
       {modal === 'queue' && <GenQueue jobs={jobs} onCancel={cancelJob} onRetry={(j) => enqueue(j.projectId, [j.trackId])} onClear={() => setJobsBoth((js) => js.filter((j) => j.state === 'queued' || j.state === 'running'))} onOpenAlbum={(id) => { setModal(null); setShowLibrary(false); setShowCloud(false); open(id); }} onClose={() => setModal(null)} />}
       {modal === 'dashboard' && <Dashboard credits={credits} onClose={() => setModal(null)} />}
       {modal === 'cowork' && <Cowork projects={projects} groups={groups} onClose={() => setModal(null)} />}

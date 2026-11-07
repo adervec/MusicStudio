@@ -194,3 +194,5 @@ th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line
 .take-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; border-bottom: 1px solid var(--line); }
 .take-row:last-of-type { border-bottom: 0; }
 .take-row.now { box-shadow: inset 3px 0 0 var(--accent); padding-left: 4px; }
+
+.badge.sfx { color: #2dd4bf; border-color: #2dd4bf; }

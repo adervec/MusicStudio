@@ -2,6 +2,7 @@ import { safeUrl, normTitle } from '../album/library.js';
 import { useState } from 'react';
 import { uid, putClip, getClip, deleteClip } from '../state/db.js';
 import { TTS_MODELS, MUSIC_PROMPT_MAX, newTrackModel } from '../api/elevenlabs.js';
+import { SFX_MODELS } from '../api/music.js';
 import AttachmentStrip from './AttachmentStrip.jsx';
 import MusicFields, { QC_COLOR, qcTitle } from './MusicFields.jsx';
 import { clipDurationMs } from '../audio/wav.js';
@@ -14,7 +15,7 @@ import Waveform from './Waveform.jsx';
 
 // The album builder: curate prompts, generate music, splice dialog / uploads, reorder, edit
 // (trim/fade/volume), and preview. `updateProject((prev)=>next)` persists.
-export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS_MODELS, backupReady, group, onTheme, coverUrl, updateProject, backupClip, writeSkeleton, onSetCover, onClearCover, onDuplicateAlbum, onCopyPath, onExport, onMetadata, onAttachments, onLoadSkeleton, onScanFolder, onListAlbumAudio, onLinkFile, onGenerate, onUpload, onDeleteTakes, onInpaint, finetunes = [], queued = 0, playlists, onAddToPlaylist, onPublish, publishName }) {
+export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS_MODELS, backupReady, group, onTheme, coverUrl, updateProject, backupClip, writeSkeleton, onSetCover, onClearCover, onDuplicateAlbum, onCopyPath, onExport, onMetadata, onAttachments, onLoadSkeleton, onScanFolder, onListAlbumAudio, onLinkFile, onGenerate, onUpload, onDeleteTakes, onInpaint, onFromSong, onFromVideo, onStems, finetunes = [], queued = 0, playlists, onAddToPlaylist, onPublish, publishName }) {
   const tracks = project.tracks || [];
   const player = usePlayer();
   const [openEdit, setOpenEdit] = useState(() => new Set());
@@ -125,6 +126,9 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
         <button onClick={addMusic}>＋ Song</button>
         <button onClick={addDialog}>＋ Dialog</button>
         <button onClick={addUploads}>⭱ Upload audio</button>
+        <button onClick={() => setTracks((ts) => [...ts, { id: uid('t_'), type: 'sfx', title: 'Sound effect', text: '', sfxDuration: 0, loop: false, promptInfluence: 0.3, sfxModel: SFX_MODELS[0].id, status: 'idle', gain: 1 }])} title="A sound-effect track (0.5–30 s) — transitions, interludes, ambience">＋ Sound effect</button>
+        <button onClick={onFromSong} title="Reverse-engineer an existing song into a plan — recreate it, make siblings in its style">🎧 From a song…</button>
+        <button onClick={onFromVideo} title="Score one or more video clips">🎬 From video…</button>
         <button onClick={() => onGenerate(gaps.map((t) => t.id))} disabled={!gaps.some((t) => t.status !== 'queued' && t.status !== 'gen') || !backupReady} title={`Queue every track that has no audio yet — est. ${fmtUsd(gapCost)}. Keeps running while you browse other albums.`}>{queued ? `⏳ ${queued} queued for this album` : `⚡ Generate all gaps${gaps.length ? ` (${gaps.length}, ~${fmtUsd(gapCost)})` : ''}`}</button>
         <div className="grow" />
         <button onClick={() => player.playQueue(tracks.filter((t) => t.clipId))} disabled={!readyCount}>▶ Play all</button>
@@ -190,6 +194,18 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
               </div>
             </>
           )}
+          {t.type === 'sfx' && (
+            <>
+              <label>Sound to make</label>
+              <textarea value={t.text || ''} onChange={(e) => patch(t.id, { text: e.target.value })} placeholder="e.g. heavy door slams shut in a stone hall, long echo" />
+              <div className="row" style={{ marginTop: 6, flexWrap: 'wrap' }}>
+                <div><label>Length (s, 0 = auto)</label><input type="number" min="0" max="30" step="0.5" value={t.sfxDuration || 0} onChange={(e) => patch(t.id, { sfxDuration: Math.max(0, Math.min(30, +e.target.value)) })} style={{ width: 90 }} /></div>
+                <div><label>Follow prompt</label><input type="range" min="0" max="1" step="0.05" value={t.promptInfluence ?? 0.3} onChange={(e) => patch(t.id, { promptInfluence: +e.target.value })} style={{ width: 110 }} /></div>
+                <div className="grow"><label>Model</label><select value={t.sfxModel || SFX_MODELS[0].id} onChange={(e) => patch(t.id, { sfxModel: e.target.value })}>{SFX_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select></div>
+                <label style={{ marginTop: 20 }}><input type="checkbox" checked={!!t.loop} onChange={(e) => patch(t.id, { loop: e.target.checked })} style={{ width: 'auto', marginRight: 5 }} />Loop seamlessly</label>
+              </div>
+            </>
+          )}
           {t.type === 'upload' && (
             <p className="note">Uploaded file: {t.fileName}{' '}
               <button className="mini" title="Turn this upload into a song entry: keep the audio, add the prompt it was made from"
@@ -198,8 +214,9 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
           )}
 
           <div className="row" style={{ marginTop: 8, flexWrap: 'wrap' }}>
+            {t.clipId && t.type !== 'dialog' && <select className="mini" value="" onChange={(e) => { if (e.target.value) onStems(t, e.target.value); }} style={{ width: 'auto' }} title="Split into stems (vocals, drums, bass…) — written to the album's stems/ folder"><option value="">🎚 Stems…</option><option value="six_stems_v1">6 stems</option><option value="two_stems_v1">2 stems (vocals / music)</option></select>}
             {t.type !== 'upload' && (
-              <button className="mini" onClick={() => onGenerate([t.id])} disabled={t.status === 'gen' || t.status === 'queued' || (t.type === 'music' ? (t.usePlan ? !t.plan?.chunks?.length : !t.prompt?.trim() || t.prompt.length > MUSIC_PROMPT_MAX) : !(t.text.trim() && t.voiceId))}>
+              <button className="mini" onClick={() => onGenerate([t.id])} disabled={t.status === 'gen' || t.status === 'queued' || (t.type === 'sfx' ? !t.text?.trim() : t.type === 'music' ? (t.usePlan ? !t.plan?.chunks?.length : !t.prompt?.trim() || t.prompt.length > MUSIC_PROMPT_MAX) : !(t.text.trim() && t.voiceId))}>
                 {t.status === 'gen' ? '… generating' : t.status === 'queued' ? '⏳ queued' : t.clipId ? '↻ Regenerate' : '✦ Generate'}
               </button>
             )}
@@ -213,6 +230,12 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
             {t.clipId && <span className="gain">vol <input type="range" min="0" max="1.5" step="0.05" value={t.gain ?? 1} onChange={(e) => patch(t.id, { gain: +e.target.value })} />{Math.round((t.gain ?? 1) * 100)}%</span>}
           </div>
 
+          {t.stems?.length > 0 && (
+            <div className="row" style={{ marginTop: 6, flexWrap: 'wrap', gap: 4, fontSize: 12 }}>
+              <span className="dim">🎚 Stems:</span>
+              {t.stems.map((st) => { const tr = { ...st, id: st.clipId, title: `${t.title} · ${st.name}`, gain: 1 }; return <button key={st.clipId} className="mini" onClick={() => player.play(tr, t.stems.map((x) => ({ ...x, id: x.clipId, title: `${t.title} · ${x.name}`, gain: 1 })))} title={st.file}>{player.playing === st.clipId && !player.paused ? '⏸' : '▶'} {st.name}</button>; })}
+            </div>
+          )}
           {linking?.id === t.id && (
             <div className="row" style={{ marginTop: 6, flexWrap: 'wrap' }}>
               {backupReady && (
