@@ -9,6 +9,7 @@ export const DYNAMIC_FIELDS = [
   { field: 'type', label: 'Track type' },                // value = 'music' | 'dialog' | 'upload'
   { field: 'genre', label: "Album genre contains" },     // value = text
   { field: 'search', label: 'Title / prompt contains' }, // value = text
+  { field: 'rating', label: 'Rated at least' },          // value = 1..5 stars
 ];
 
 function descendantGroupIds(gid, groups) {
@@ -42,6 +43,7 @@ export function resolvePlaylist(pl, projects = [], groups = []) {
   else if (rule.field === 'group') { const ids = descendantGroupIds(v, groups); items = flat.filter(([, p]) => ids.has(p.parentId)); }
   else if (rule.field === 'type') items = flat.filter(([t]) => t.type === v);
   else if (rule.field === 'genre') items = flat.filter(([, p]) => (p.meta?.genre || '').toLowerCase().includes(lc));
+  else if (rule.field === 'rating') items = flat.filter(([t]) => (t.rating || 0) >= (+v || 4)).sort(([a], [b]) => (b.rating || 0) - (a.rating || 0));
   else if (rule.field === 'search') items = flat.filter(([t]) => `${t.title || ''} ${t.prompt || ''} ${t.text || ''}`.toLowerCase().includes(lc));
   return items.map(([t, p]) => decorate(t, p));
 }

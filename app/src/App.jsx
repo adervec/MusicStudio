@@ -3,12 +3,13 @@ import { uid, listProjects, getProject, saveProject, deleteProject, listGroups, 
 import { listVoices, listTtsModels, TTS_MODELS, newTrackModel, getSubscription, tts, musicModelFor } from './api/elevenlabs.js';
 import GenQueue from './components/GenQueue.jsx';
 import ConfirmSpend from './components/ConfirmSpend.jsx';
-import { composeBody, composeDetailed, lrcFromWords, toChunks, planMs, uploadSong, inpaintPlan, draftPlan, separateStems, soundEffect, videoToMusic, SFX_MODELS } from './api/music.js';
+import { composeBody, composeDetailed, lrcFromWords, toChunks, planMs, uploadSong, inpaintPlan, draftPlan, separateStems, soundEffect, videoToMusic, SFX_MODELS, listFinetunes, createFinetune } from './api/music.js';
 import FromSong from './components/FromSong.jsx';
 import FromVideo from './components/FromVideo.jsx';
 import { qcMetrics, qcGrade } from './audio/qc.js';
 import { decodeBlob } from './audio/wav.js';
 import { takeToRep, repAsTake, estimateJobs } from './album/takes.js';
+import { buildTaste } from './album/taste.js';
 import PlayerBar from './components/PlayerBar.jsx';
 import { pickBackupDir, ensureWritable, writeToDir, readTextFrom, readBlobFrom, listFiles, removeFromDir, ensureDir, moveDir, removeDir, listAlbumDirs, scanAlbums, looksLikeAppFolder, download, pickFile, canWriteQuietly, setPickerStart, dirAt } from './backup/fs.js';
 import { publishAlbum, publishState, publishTargets, masterTargets, coverPicture, retagBlob, renderTrackFile } from './backup/publish.js';
@@ -56,6 +57,20 @@ export default function App() {
   // ElevenLabs credit pool for the 💲 Spend bar: on key change, shortly after every generation, and every 10 min.
   const [credits, setCredits] = useState(null);
   const [finetunes, setFinetunes] = useState([]); // the account's music finetunes (Settings → Finetunes)
+  const loadFinetunes = useCallback(() => (apiKey ? listFinetunes(apiKey).then(setFinetunes).catch(() => {}) : null), [apiKey]);
+  useEffect(() => { loadFinetunes(); }, [loadFinetunes]);
+  useEffect(() => { // poll while one is training
+    if (!finetunes.some((f) => f.status === 'pending' || f.status === 'in_progress')) return;
+    const iv = setInterval(loadFinetunes, 60000); return () => clearInterval(iv);
+  }, [finetunes, loadFinetunes]);
+  async function makeFinetune({ name, genre, source }) {
+    const pool = projects.flatMap((p) => (p.tracks || []).filter((t) => t.clipId && (source === 'rated4' ? (t.rating || 0) >= 4 : source === 'fav' ? t.fav : p.id === source)));
+    if (!pool.length) return showToast('No songs with audio match that choice');
+    const files = [];
+    for (const t of pool.slice(0, 50)) { const b = await getClip(t.clipId); if (b) files.push({ blob: b, name: t.backupFile || `${sanitizeFilename(t.title || 'track')}.mp3` }); }
+    try { await createFinetune({ name: name.trim(), genre: genre.trim(), files, model: musicModelFor({}) }, apiKey); showToast(`🎓 Finetune “${name}” started with ${files.length} songs`); loadFinetunes(); }
+    catch (e) { showToast('Finetune failed: ' + (e.message || e)); }
+  }
   useEffect(() => {
     if (!apiKey) { setCredits(null); return; }
     let t = null;
@@ -713,6 +728,18 @@ export default function App() {
     }
   }
   useEffect(() => { tagSyncRef.current = runTagSync; });
+  // Taste profile for agents (TASTE.md + taste.json at the backup root) — rewritten only when it changes.
+  const tasteRef = useRef('');
+  useEffect(() => {
+    if (!dir) return;
+    const t = setTimeout(async () => {
+      if (!(await canWriteQuietly(dir))) return;
+      const { json, markdown } = buildTaste(projects, groups);
+      if (markdown === tasteRef.current) return;
+      try { await writeToDir(dir, 'TASTE.md', new Blob([markdown], { type: 'text/markdown' })); await writeToDir(dir, 'taste.json', new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' })); tasteRef.current = markdown; } catch { /* retried on the next change */ }
+    }, 6000);
+    return () => clearTimeout(t);
+  }, [projects, groups, dir]);
   useEffect(() => { // debounce: every edit restarts the clock, so typing never triggers a write
     if (!dir && !pubDir) return;
     const t = setTimeout(() => tagSyncRef.current?.(), 5000);
@@ -892,15 +919,24 @@ export default function App() {
   const freshProject = async (id) => (activeRef.current?.id === id ? activeRef.current : await getProject(id));
 
   const [spendAsk, setSpendAsk] = useState(null); // pending confirmation before credits are spent
+  // Several albums' tracks through ONE spend confirmation (e.g. bulk generate from the Library).
+  async function enqueueBatches(batches, opts = {}) {
+    if (prefs.confirmSpend !== false && !opts.confirmed) {
+      const items = []; const names = [];
+      for (const b of batches) { const p = await freshProject(b.projectId); if (!p) continue; names.push(p.title || 'Album'); items.push(...b.trackIds.map((id) => p.tracks.find((t) => t.id === id)).filter(Boolean)); }
+      setSpendAsk({ batches, opts, album: names.length > 1 ? `${names.length} albums` : names[0] || 'Album', ...estimateJobs(items.map((t) => ({ ...t, videoCount: opts.videos?.length })), { takes: prefs.takes || 1, model: musicModelFor, kind: opts.kind || '' }) });
+      return;
+    }
+    for (const b of batches) await enqueue(b.projectId, b.trackIds, { ...opts, confirmed: true });
+  }
+  async function rateTracks(batches, rating) {
+    for (const b of batches) { const ids = new Set(b.trackIds); await updateProjectById(b.projectId, (p) => ({ ...p, tracks: (p.tracks || []).map((t) => (ids.has(t.id) ? { ...t, rating } : t)) })); }
+  }
   async function enqueue(projectId, trackIds, opts = {}) {
     if (!apiKey) { showToast('Set your ElevenLabs API key in Settings first'); setModal('settings'); return; }
     if (!dir || !(await ensureWritable(dir))) { showToast('Connect the backup folder (outside the app) before generating'); setModal('settings'); return; }
     const p = await freshProject(projectId); if (!p) return;
-    if (prefs.confirmSpend !== false && !opts.confirmed) {
-      const items = trackIds.map((id) => p.tracks.find((t) => t.id === id)).filter(Boolean);
-      setSpendAsk({ projectId, trackIds, opts, album: p.title || 'Album', ...estimateJobs(items.map((t) => ({ ...t, videoCount: opts.videos?.length })), { takes: prefs.takes || 1, model: musicModelFor, kind: opts.kind || '' }) });
-      return;
-    }
+    if (prefs.confirmSpend !== false && !opts.confirmed) return enqueueBatches([{ projectId, trackIds }], opts);
     const busy = new Set(jobsRef.current.filter((j) => (j.state === 'queued' || j.state === 'running') && (j.kind || '') === (opts.kind || '')).map((j) => j.trackId));
     const add = trackIds.filter((id) => !busy.has(id)).map((id) => ({ id: uid('j_'), projectId, trackId: id, album: p.title || 'Album', title: p.tracks.find((t) => t.id === id)?.title || 'Track', state: 'queued', plan: opts.plan || null, kind: opts.kind || '', videos: opts.videos || null, video: opts.video || null, variation: opts.variation || '' }));
     if (!add.length) return;
@@ -1139,11 +1175,11 @@ export default function App() {
             ? <CloudLibrary catalog={catalog} requests={requests} busy={cloudBusy} isDesktop={!!pubDir}
                 onSave={saveCloudRequest} onRefresh={() => (drive ? pullCloud() : connectDrive())} />
             : showLibrary
-            ? <Library projects={projects} groups={groups} onOpenAlbum={(id) => { setShowLibrary(false); open(id); }} />
+            ? <Library projects={projects} groups={groups} onOpenAlbum={(id) => { setShowLibrary(false); open(id); }} onRate={rateTracks} onGenerate={(b) => enqueueBatches(b)} playlists={playlists} onAddToPlaylist={addTracksToPlaylist} />
             : playlist
             ? <PlaylistView playlist={playlist} projects={projects} groups={groups} onChange={changePlaylist} onRename={() => renamePlaylist(playlist)} onDelete={() => removePlaylist(playlist)} onOpenAlbum={open} />
             : groupView
-            ? <GroupView group={groupView} groups={groups} projects={projects} onOpenAlbum={open} onCopyPath={() => copyGroupPath(groupView)} onAttachments={() => { setAttGroupId(groupView.id); setModal('attachments'); }} />
+            ? <GroupView group={groupView} groups={groups} projects={projects} onOpenAlbum={open} onCopyPath={() => copyGroupPath(groupView)} onChangeGroup={async (up) => { await saveGroup({ ...groupView, ...up }); refreshGroups(); }} onAttachments={() => { setAttGroupId(groupView.id); setModal('attachments'); }} />
             : active
             ? <Editor project={active} apiKey={apiKey} prefs={prefs} voices={voices} ttsModels={ttsModels} backupReady={!!dir}
                 group={groups.find((g) => g.id === active.parentId)} onTheme={setGroupTheme} coverUrl={coverUrl}
@@ -1156,7 +1192,7 @@ export default function App() {
       </div>
 
       {modal === 'settings' && (
-        <Settings apiKey={apiKey} prefs={prefs} voices={voices} ttsModels={ttsModels} backupName={dir?.name} publishName={pubDir?.name}
+        <Settings finetunes={finetunes} projects={projects} onRefreshFinetunes={loadFinetunes} onCreateFinetune={makeFinetune} apiKey={apiKey} prefs={prefs} voices={voices} ttsModels={ttsModels} backupName={dir?.name} publishName={pubDir?.name}
           onClose={() => setModal(null)} onVoices={setVoices}
           onSave={async (k, p) => { await setSetting('apiKey', k); await setSetting('prefs', p); setApiKey(k); setPrefs(p); setModal(null); if (k && !voices.length) listVoices(k).then(setVoices).catch(() => {}); if (k) listTtsModels(k).then((m) => m.length && setTtsModels(m)).catch(() => {}); }}
           onPickBackup={pickBackup} onClearBackup={dropBackup} onPickPublish={pickPublish} onClearPublish={dropPublish} onManageSync={() => setModal('sync')} onExportData={exportData} onImportData={importData}
@@ -1167,7 +1203,7 @@ export default function App() {
       )}
       <PlayerBar info={(id) => trackInfo.get(id)} onOpenAlbum={(id) => { setShowLibrary(false); setShowCloud(false); open(id); }} />
       {spendAsk && <ConfirmSpend ask={spendAsk} onCancel={() => setSpendAsk(null)}
-        onConfirm={async (dontAsk) => { const a = spendAsk; setSpendAsk(null); if (dontAsk) { const np = { ...prefs, confirmSpend: false }; setPrefs(np); await setSetting('prefs', np); } enqueue(a.projectId, a.trackIds, { ...a.opts, confirmed: true }); }} />}
+        onConfirm={async (dontAsk) => { const a = spendAsk; setSpendAsk(null); if (dontAsk) { const np = { ...prefs, confirmSpend: false }; setPrefs(np); await setSetting('prefs', np); } enqueueBatches(a.batches, { ...a.opts, confirmed: true }); }} />}
       {modal === 'fromSong' && active && <FromSong apiKey={apiKey} busy={wizBusy} onCreate={createFromSong} onClose={() => setModal(null)} />}
       {modal === 'fromVideo' && active && <FromVideo onCreate={createFromVideo} onClose={() => setModal(null)} />}
       {modal === 'queue' && <GenQueue jobs={jobs} onCancel={cancelJob} onRetry={(j) => enqueue(j.projectId, [j.trackId])} onClear={() => setJobsBoth((js) => js.filter((j) => j.state === 'queued' || j.state === 'running'))} onOpenAlbum={(id) => { setModal(null); setShowLibrary(false); setShowCloud(false); open(id); }} onClose={() => setModal(null)} />}

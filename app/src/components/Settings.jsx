@@ -5,7 +5,7 @@ import { MUSIC_MODELS, TTS_MODELS, listVoices, getSubscription } from '../api/el
 import { dirPickerSupported } from '../backup/fs.js';
 
 // API key, default models/voice, and the local backup folder. Key + prefs persist on-device.
-export default function Settings({ ttsModels, apiKey, prefs, voices, backupName, publishName, onClose, onSave, onVoices, onPickBackup, onClearBackup, onPickPublish, onClearPublish, onManageSync, onExportData, onImportData,
+export default function Settings({ finetunes = [], projects = [], onRefreshFinetunes, onCreateFinetune, ttsModels, apiKey, prefs, voices, backupName, publishName, onClose, onSave, onVoices, onPickBackup, onClearBackup, onPickPublish, onClearPublish, onManageSync, onExportData, onImportData,
   driveOn, driveEmail, driveAvailable, cloudBusy, onConnectDrive, onDisconnectDrive, onPushCatalog }) {
   const [key, setKey] = useState(apiKey || '');
   const [p, setP] = useState(prefs);
@@ -41,6 +41,12 @@ export default function Settings({ ttsModels, apiKey, prefs, voices, backupName,
         <option value="latest">Latest — always ElevenLabs' newest model (recommended)</option>
         {MUSIC_MODELS.map((m) => <option key={m.id} value={m.id}>📌 Pin: {m.label}</option>)}
       </select>
+      <div className="row" style={{ flexWrap: 'wrap', gap: 14, marginTop: 8 }}>
+        <label className="row" style={{ margin: 0 }}>Takes per Generate <select value={p.takes || 1} onChange={(e) => set('takes', +e.target.value)} style={{ width: 70 }}>{[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
+        <label className="row" style={{ margin: 0 }}><input type="checkbox" style={{ width: 'auto' }} checked={p.confirmSpend !== false} onChange={(e) => set('confirmSpend', e.target.checked)} /> Confirm before spending credits</label>
+        <label className="row" style={{ margin: 0 }} title="Spell proper names phonetically in sung lyrics (per-track override under ▸ More)"><input type="checkbox" style={{ width: 'auto' }} checked={!!p.phoneticNames} onChange={(e) => set('phoneticNames', e.target.checked)} /> Phonetic names</label>
+        <label className="row" style={{ margin: 0 }} title="Sign generated MP3s with C2PA content credentials (marks them as AI-generated)"><input type="checkbox" style={{ width: 'auto' }} checked={!!p.c2pa} onChange={(e) => set('c2pa', e.target.checked)} /> C2PA-sign MP3s</label>
+      </div>
       <label>Default song length (seconds)</label>
       <input type="number" min="3" max="600" value={p.defaultLengthSec} onChange={(e) => set('defaultLengthSec', +e.target.value)} />
       <label>Dialog (TTS) model</label>
@@ -54,6 +60,9 @@ export default function Settings({ ttsModels, apiKey, prefs, voices, backupName,
       </select>
       <label>Gap between album tracks (ms)</label>
       <input type="number" min="0" max="5000" value={p.gapMs} onChange={(e) => set('gapMs', +e.target.value)} />
+
+      <div className="section">Finetunes — train a model on your own songs</div>
+      <FinetunePanel finetunes={finetunes} projects={projects} onRefresh={onRefreshFinetunes} onCreate={onCreateFinetune} hasKey={!!apiKey} />
 
       <div className="section">Local backup folder</div>
       {dirPickerSupported() ? (
@@ -106,5 +115,33 @@ export default function Settings({ ttsModels, apiKey, prefs, voices, backupName,
       <p className="note">More apps by the same maker, all free and local-first —{' '}
         <a href="https://adervec.github.io/portal/" target="_blank" rel="noopener noreferrer">adervec.github.io</a></p>
     </Dialog>
+  );
+}
+
+function FinetunePanel({ finetunes, projects, onRefresh, onCreate, hasKey }) {
+  const [o, setO] = useState({ name: '', genre: '', source: 'rated4' });
+  const [busy, setBusy] = useState('');
+  const set = (k) => (e) => setO({ ...o, [k]: e.target.value });
+  return (
+    <>
+      {finetunes.length ? finetunes.map((f) => (
+        <div key={f.id} className="row" style={{ fontSize: 13 }}>
+          <span className="grow ell">{f.name} <span className="dim">· {f.primary_genre || ''} · {f.model_id}</span></span>
+          <span style={{ color: f.status === 'completed' ? 'var(--good)' : f.status === 'failed' || f.status === 'blocked' ? 'var(--bad)' : 'var(--warn)' }}>{f.status}{f.status === 'in_progress' ? ` ${Math.round((f.training_progress || 0) * 100)}%` : ''}</span>
+        </div>
+      )) : <p className="note">{hasKey ? 'No finetunes yet.' : 'Needs the API key.'}</p>}
+      <div className="row" style={{ marginTop: 6, flexWrap: 'wrap' }}>
+        <input value={o.name} onChange={set('name')} placeholder="Name (5+ characters)" style={{ maxWidth: 180 }} />
+        <input value={o.genre} onChange={set('genre')} placeholder="Primary genre" style={{ maxWidth: 140 }} />
+        <select value={o.source} onChange={set('source')} style={{ maxWidth: 220 }}>
+          <option value="rated4">Train on my ★★★★+ songs</option>
+          <option value="fav">Train on my ♥ favourites</option>
+          {projects.map((p) => <option key={p.id} value={p.id}>Album: {p.title}</option>)}
+        </select>
+        <button disabled={!hasKey || o.name.trim().length < 5 || !!busy} onClick={async () => { setBusy('Uploading…'); await onCreate(o); setBusy(''); }}>{busy || 'Create finetune'}</button>
+        <button className="mini" onClick={onRefresh} disabled={!hasKey}>↻</button>
+      </div>
+      <p className="note">Uploads up to 50 of those songs' audio to ElevenLabs to train a private finetune. When it's completed, pick it per track under ▸ More (with a strength).</p>
+    </>
   );
 }

@@ -498,6 +498,33 @@ import { bufToB64, b64ToBuf } from '../state/db.js';
   assert.equal(m.plan.chunks[0].text, '[Outro]', 'an agent-written v1-style plan is normalized to chunks');
 }
 
+// Ratings roll up song → album → group; the taste profile surfaces what's loved, disliked, and why.
+{
+  const R = await import('../album/taste.js');
+  const groups = [{ id: 'g', name: 'Synth', parentId: null, likes: ['analog warmth'] }, { id: 'h', name: 'Cycle', parentId: 'g' }];
+  const projects = [
+    { id: 'a', title: 'Neon', parentId: 'h', meta: { genre: 'Darksynth' }, tracks: [
+      { id: '1', type: 'music', title: 'Rain', prompt: 'darksynth, heavy arps', rating: 5, likes: ['the arp at 1:10', 'analog warmth'], notes: 'perfect opener' },
+      { id: '2', type: 'music', title: 'Steel', prompt: 'darksynth, heavy arps', rating: 3 },
+      { id: '3', type: 'music', title: 'Mud', prompt: 'trap, autotune', rating: 1, dislikes: ['autotune'] },
+      { id: '4', type: 'music', title: 'Mud 2', prompt: 'trap, autotune', rating: 2, dislikes: ['autotune'] }] },
+    { id: 'b', title: 'Hymns', parentId: 'g', rating: 4, tracks: [{ id: '5', type: 'upload', title: 'Bells' }] },
+  ];
+  assert.deepEqual(R.albumRating(projects[0]), { mine: null, calc: 2.8, n: 4, eff: 2.75 });
+  assert.equal(R.albumRating(projects[1]).eff, 4, 'my own rating wins over the calculation');
+  const gr = R.groupRatings(groups, projects);
+  assert.deepEqual([gr.get('h').calc, gr.get('h').n], [2.8, 1]);
+  assert.deepEqual([gr.get('g').calc, gr.get('g').n], [3.4, 2], 'group = mean of its albums + sub-groups (effective)');
+  const { json, markdown } = R.buildTaste(projects, groups);
+  assert.deepEqual(json.topSongs.map((s) => s.title), ['Rain']);
+  assert.deepEqual(json.lowSongs.map((s) => s.title), ['Mud', 'Mud 2']);
+  assert.deepEqual(json.recurringDislikes, [{ dislike: 'autotune', n: 2 }]);
+  assert.equal(json.recurringLikes[0].like, 'analog warmth', 'likes counted across song + group levels');
+  assert.equal(json.stylesLiked[0].tag, 'heavy arps'); assert.ok(json.stylesDisliked.some((x) => x.tag === 'trap'));
+  assert.ok(markdown.includes('## Loved') && markdown.includes('perfect opener') && markdown.includes('avoid'));
+  assert.equal(R.buildTaste(projects, groups).markdown, markdown, 'deterministic — unchanged ratings never rewrite the file');
+}
+
 // Take quality check: silence, clipping and quiet takes are flagged and score lower.
 {
   const { qcMetrics, qcGrade } = await import('./qc.js');

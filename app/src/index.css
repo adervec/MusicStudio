@@ -196,3 +196,17 @@ th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line
 .take-row.now { box-shadow: inset 3px 0 0 var(--accent); padding-left: 4px; }
 
 .badge.sfx { color: #2dd4bf; border-color: #2dd4bf; }
+
+/* Ratings + notes */
+.stars { display: inline-flex; align-items: center; white-space: nowrap; }
+.stars button { background: none; border: 0; padding: 0 1px; line-height: 1; cursor: pointer; }
+.notes-panel { margin: 6px 0; display: grid; gap: 4px; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; border: 1px solid var(--line); border-radius: 7px; padding: 3px 5px; background: var(--bg); }
+.chips input { border: 0; flex: 1; min-width: 140px; padding: 2px 4px; background: transparent; }
+.chip { font-size: 12px; border-radius: 10px; padding: 1px 4px 1px 8px; border: 1px solid var(--line); }
+.chip.like { color: var(--good); border-color: var(--good); } .chip.dislike { color: var(--bad); border-color: var(--bad); }
+.chip button { background: none; border: 0; padding: 0 3px; font-size: 10px; color: inherit; }
+
+.bulk-bar { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 10px; margin-bottom: 6px;
+  background: var(--panel2); border: 1px solid var(--accent); border-radius: 10px; }
+.lib-table tr.sel td { background: color-mix(in srgb, var(--accent) 12%, transparent); }

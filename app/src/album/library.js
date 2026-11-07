@@ -20,9 +20,9 @@ export function libraryRows(projects, groups = []) {
       const r = {
         id: t.id, albumId: p.id, album: p.title || 'Untitled', group, n: i + 1, title: t.title || '', type: t.type || 'music',
         status: t.clipId ? 'ready' : isGap(t) ? 'gap' : 'empty', ms: t.clipId ? (t.durationMs || 0) : 0,
-        planMs: t.lengthMs || 0, fav: !!t.fav, prompt, genre, year, artist, url: safeUrl(t.sourceUrl), track: t,
+        planMs: t.lengthMs || 0, fav: !!t.fav, rating: t.rating || 0, notes: [t.notes, ...(t.likes || []), ...(t.dislikes || [])].filter(Boolean).join(' · '), prompt, genre, year, artist, url: safeUrl(t.sourceUrl), qc: t.qc?.grade || '', takes: (t.takes || []).length + (t.clipId ? 1 : 0), seed: Number.isInteger(t.seed) ? t.seed : '', track: t,
       };
-      r.hay = [r.title, r.album, group, prompt, genre, year, artist, r.url].join(' ').toLowerCase();
+      r.hay = [r.title, r.album, group, prompt, genre, year, artist, r.url, r.notes, t.lyrics || ''].join(' ').toLowerCase();
       rows.push(r);
     });
   }
@@ -30,10 +30,10 @@ export function libraryRows(projects, groups = []) {
 }
 
 // All words must match somewhere (title/album/group/prompt/genre/year/artist). Group matches its subtree.
-export function filterRows(rows, { q = '', group = '', type = '', status = '', fav = false } = {}) {
+export function filterRows(rows, { q = '', group = '', type = '', status = '', fav = false, minRating = 0 } = {}) {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   return rows.filter((r) => (!group || r.group === group || r.group.startsWith(group + '/'))
-    && (!type || r.type === type) && (!status || r.status === status) && (!fav || r.fav)
+    && (!type || r.type === type) && (!status || r.status === status) && (!fav || r.fav) && (!minRating || (r.rating || 0) >= minRating)
     && words.every((w) => r.hay.includes(w)));
 }
 
@@ -158,4 +158,18 @@ export function pairItems(prompts = [], files = []) {
   take((a, b) => Math.min(a.length, b.length) >= 3 && (a.includes(b) || b.includes(a)));
   for (const f of left) rows.push({ title: fileTitle(f.name), prompt: '', url: '', file: f });
   return rows;
+}
+
+// Full library logbook — every track with everything needed to find, judge or re-make it: prompts,
+// plans, lyrics, seeds, models, quality, takes, files, ratings, notes, links.
+export function logbook(projects = [], groups = []) {
+  return (projects || []).flatMap((p) => (p.tracks || []).map((t, i) => ({
+    album: p.title || '', albumId: p.id, folder: albumFolderPath(p, groups), n: i + 1, trackId: t.id, title: t.title || '', type: t.type,
+    status: t.clipId ? 'ready' : isGap(t) ? 'gap' : 'empty', file: t.backupFile || null, durationMs: t.durationMs || 0,
+    prompt: t.prompt || t.text || '', lyrics: t.lyrics || '', usePlan: !!t.usePlan, plan: t.plan || null, planUsed: t.genPlan || null,
+    model: t.genModel || t.model || '', seed: Number.isInteger(t.seed) ? t.seed : null, songId: t.songId || null, qc: t.qc || null,
+    elevenlabs: t.genMeta || null, takes: (t.takes || []).map((k) => ({ file: k.backupFile, seed: k.seed, qc: k.qc?.grade || null, note: k.note || '', at: k.at || 0 })),
+    stems: (t.stems || []).map((s) => s.file), rating: t.rating || 0, fav: !!t.fav, notes: t.notes || '', likes: t.likes || [], dislikes: t.dislikes || [],
+    sourceUrl: t.sourceUrl || '', albumMeta: p.meta || {},
+  })));
 }

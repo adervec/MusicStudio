@@ -1,5 +1,7 @@
 # Music Studio — TODO
 
+> **Built 2026-11-07:** ratings/notes/taste profile and every idea below except where marked. Kept for the design notes.
+
 ## Ratings, notes and taste profile (exposed to AI agents)
 
 _Requested 2026-10-09._

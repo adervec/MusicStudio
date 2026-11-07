@@ -5,6 +5,8 @@ import { TTS_MODELS, MUSIC_PROMPT_MAX, newTrackModel } from '../api/elevenlabs.j
 import { SFX_MODELS } from '../api/music.js';
 import AttachmentStrip from './AttachmentStrip.jsx';
 import MusicFields, { QC_COLOR, qcTitle } from './MusicFields.jsx';
+import { Stars, NotesPanel, hasNotes } from './Rating.jsx';
+import { albumRating } from '../album/taste.js';
 import { clipDurationMs } from '../audio/wav.js';
 import { pickFile } from '../backup/fs.js';
 import { fmtDuration, fmtUsd, musicCost, ttsCost } from '../state/pricing.js';
@@ -26,6 +28,9 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
     setTracks((ts) => ts.filter((t) => !sel.has(t.id)));
     setSel(new Set());
   }
+  const [openNotes, setOpenNotes] = useState(() => new Set()); // tracks (and 'album') with the notes panel open
+  const toggleNotes = (id) => setOpenNotes((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const ar = albumRating(project);
   const staticPlaylists = (playlists || []).filter((p) => p.kind === 'static');
   // 📎 Link file: one track at a time; the album folder's audio, best title match first.
   const [linking, setLinking] = useState(null); // { id, files: null (loading) | [{ name, used, match }] }
@@ -94,6 +99,8 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
           <div className="row"><input className="grow" value={project.title} onChange={(e) => setMeta('title', e.target.value)} placeholder="Album title" style={{ fontSize: 18, fontWeight: 600 }} /></div>
           <div className="row" style={{ marginTop: 4 }}>
             <input value={project.artist || ''} onChange={(e) => setMeta('artist', e.target.value)} placeholder="Artist" style={{ maxWidth: 200 }} />
+            <Stars value={project.rating || 0} onChange={(v) => setMeta('rating', v)} calc={ar.calc} n={ar.n} size={16} />
+            <button className={`mini${hasNotes(project) ? ' primary' : ''}`} onClick={() => toggleNotes('album')} title="Album notes, likes and dislikes">📝</button>
             <button className="mini" onClick={onDuplicateAlbum} title="Duplicate this album">⧉ Duplicate</button>
             <button className="mini" onClick={onCopyPath} disabled={!backupReady} title="Open this album's folder in File Explorer (or copy its path)">📂 Open folder</button>
             {coverUrl && <button className="mini" onClick={onClearCover}>Remove cover</button>}
@@ -118,6 +125,7 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
         <button onClick={onScanFolder} disabled={!backupReady} title="Scan this album's folder — recover audio for gap tracks and import any loose audio files">🔎 Scan folder</button>
       </div>
 
+      {openNotes.has('album') && <NotesPanel obj={project} what="album" onChange={(up) => updateProject((p) => ({ ...p, ...up }))} />}
       <AttachmentStrip list={project.attachments} />
 
       {!backupReady && <p className="note" style={{ color: 'var(--warn)' }}>⚠ Set a backup folder outside the app (Settings) — required before generating, and where the album skeleton is exposed for an external agent.</p>}
@@ -163,6 +171,7 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
           <div className="track-head">
             <input type="checkbox" checked={sel.has(t.id)} onChange={() => toggleSel(t.id)} style={{ width: 'auto' }} title="Select track" />
             <span className={`badge ${t.type}`}>{t.type}</span>
+            <Stars value={t.rating || 0} onChange={(v) => patch(t.id, { rating: v })} size={12} />
             <button className="mini" onClick={() => patch(t.id, { fav: !t.fav })} title={t.fav ? 'Unfavorite' : 'Favorite'} style={{ color: t.fav ? 'var(--gold, #f5c451)' : 'var(--dim)', border: 'none', background: 'none', padding: 0 }}>{t.fav ? '★' : '☆'}</button>
             {t.qc && <span className="badge" style={{ color: QC_COLOR[t.qc.grade], borderColor: QC_COLOR[t.qc.grade] }} title={qcTitle(t.qc)}>QC {t.qc.grade}{t.qc.flags?.length ? ' ⚠' : ''}</span>}
             {(t.takes?.length || 0) > 0 && <span className="badge" title="Other takes of this track (open ▸ Takes below)">{t.takes.length + 1} takes</span>}
@@ -174,10 +183,12 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
             {t.clipId && <button className="mini" onClick={() => player.play(t, tracks)}>{player.playing === t.id ? (player.paused ? '▶' : '⏸') : '▶'}</button>}
             {t.clipId && <button className="mini" onClick={() => player.enqueue([t])} title="Add to the end of the play queue">＋♫</button>}
             {t.clipId && <button className="mini" onClick={() => toggleEdit(t.id)} title="Trim / fade">✎</button>}
+            <button className={`mini${hasNotes(t) ? ' primary' : ''}`} onClick={() => toggleNotes(t.id)} title="Notes, likes and dislikes for this song">📝</button>
             <button className="mini" onClick={() => duplicateTrack(t)} title="Duplicate track">⧉</button>
             <button className="mini danger" onClick={() => remove(t)}>🗑</button>
           </div>
 
+          {openNotes.has(t.id) && <NotesPanel obj={t} onChange={(up) => patch(t.id, up)} />}
           {t.clipId && <Waveform clipId={t.clipId} progress={player.playing === t.id ? (player.dur ? player.cur / player.dur : 0) : 0} onSeek={(frac) => { if (player.playing === t.id) player.seek(frac * (player.dur || 0)); else player.play(t, tracks); }} />}
 
           {t.type === 'music' && <MusicFields t={t} patch={(up) => patch(t.id, up)} prefs={prefs} apiKey={apiKey} player={player} finetunes={finetunes} onDeleteTakes={onDeleteTakes} onInpaint={onInpaint} />}

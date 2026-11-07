@@ -72,6 +72,7 @@ export function buildAlbumJson(project) {
     app: 'musicstudio', schemaVersion: 1, id: project.id,
     title: project.title || '', artist: project.artist || '', description: project.description || '',
     cover: project.cover?.file || null, // relative path of the album cover image, if any
+    rating: project.rating || 0, notes: project.notes || '', likes: project.likes || [], dislikes: project.dislikes || [], // human-owned
     meta: { ...defaultMeta(), ...(project.meta || {}) },
     tracks: (project.tracks || []).map((t) => ({
       id: t.id, type: t.type, title: t.title || '',
@@ -81,6 +82,7 @@ export function buildAlbumJson(project) {
       gain: t.gain ?? 1, sourceUrl: t.sourceUrl || '',
       lyrics: t.lyrics || '', usePlan: !!t.usePlan, plan: t.plan || null, respectDurations: t.respectDurations !== false, takesN: t.takesN || 1,
       seed: Number.isInteger(t.seed) ? t.seed : null, takes: (t.takes || []).length, // app-managed
+      rating: t.rating || 0, notes: t.notes || '', likes: t.likes || [], dislikes: t.dislikes || [], // human-owned
       generated: !!t.clipId, file: t.backupFile || null, // written by the app; agents leave these alone
     })),
     // Reference material for the agent — style guides, inspirations, notes. Files live in attachments/.
@@ -298,6 +300,7 @@ Rewrite \`tracks[]\` into a complete skeleton that delivers the brief:
         "context_adherence": "high" } ] },  // low | medium | high
     "respectDurations": boolean,  // plan mode: hold section durations strictly (default true)
     "takesN": number,             // 1..4 generations per Generate; the app keeps the best, the rest as takes
+    "rating": number, "notes": string, "likes": [], "dislikes": [],  // HUMAN-OWNED — read them, never edit (also at album level)
     "seed": number|null,          // app-managed — DO NOT edit
     "takes": number,              // app-managed — DO NOT edit
     "importFile": string,         // OPTIONAL: filename of an EXISTING audio file in THIS album folder to
@@ -336,6 +339,14 @@ The human may drop **handoff docs** — album specs, track lists, prompt drafts,
 not an album; treat it as read-only source material. Your job: turn each handoff into a real album —
 create the album folder in the right group, write its \`album.json\` (tracks, prompts, metadata from
 the doc), and leave the handoff file where it is.
+
+## Taste — what the human likes
+
+\`TASTE.md\` (and \`taste.json\`) at the folder root summarise the human's own ratings (1–5★), notes, likes
+and dislikes across every song, album and group: what they loved (with its prompts/plans and styles),
+which styles rate well or poorly, recurring likes and dislikes. **When asked to make something "like
+what I liked", start there** — reuse the loved songs' styles, structure and prompt wording, and steer
+clear of the dislikes. Ratings/notes also appear in each album.json; they are human-owned: never edit them.
 
 ## Reverse-engineering an album from an existing song
 Sometimes the human analyzes a finished song in a chat (agents there can *listen* to audio; you

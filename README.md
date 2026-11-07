@@ -22,6 +22,11 @@ is stored on-device and sent only to ElevenLabs.
 - **Agent workflow** — the backup folder holds an `AGENT.md` and one `album.json` per album, so a
   separate Claude Code session can design albums (tracks, prompts, metadata) that the app live-reloads.
 - **📊 Library table** — every song sortable/filterable in one table with stats; **🧩 Build album** pairs loose prompts and audio files into an album; **🗂 Reorganize** bulk-moves or auto-sorts the group tree.
+- **Takes & quality check** — 1–4 takes per Generate; each is checked (silence, clipping, quiet, gaps) and the best becomes the song; keep, note, compare, swap or prune the rest. Seeds are kept (reuse with 🔒).
+- **Composition plans** — compose section by section (lyrics, length, styles), ✨ draft a plan from a prompt, ✂ redo one section of a finished song, lyrics + synced `.lrc` files.
+- **🎧 From a song** — ElevenLabs reverse-engineers an existing song into a plan: recreate it, make sibling songs in its style, optionally sound like the original.
+- **Sound effects, 🎬 video scoring, 🎚 stems, finetunes** (train on your ★4+ songs).
+- **Ratings & taste** — rate songs, albums and groups (with a calculated rating from what's underneath), note likes/dislikes; `TASTE.md` tells agents what you like.
 - **Persistent player** — one queue that keeps playing as you browse; a bottom bar with an editable Up-next list (play any, reorder, remove, add from anywhere).
 - **📂 Open in Explorer** — set the backup folder's full path in Settings, then run `toolsolder-helper\install.cmd` once (per-user, no admin) so 📂 opens File Explorer from the installed/web app.
 - **Device sync + phone remote** — see below.

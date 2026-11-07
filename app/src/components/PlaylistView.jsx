@@ -46,6 +46,7 @@ export default function PlaylistView({ playlist, projects, groups, onChange, onR
           </select>
           {rule.field === 'group' && <select value={rule.value || ''} onChange={(e) => setRule({ ...rule, value: e.target.value })} style={{ width: 'auto' }}><option value="">— pick —</option>{groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select>}
           {rule.field === 'type' && <select value={rule.value || ''} onChange={(e) => setRule({ ...rule, value: e.target.value })} style={{ width: 'auto' }}><option value="">— pick —</option>{['music', 'dialog', 'upload'].map((x) => <option key={x} value={x}>{x}</option>)}</select>}
+          {rule.field === 'rating' && <select value={rule.value || '4'} onChange={(e) => setRule({ ...rule, value: e.target.value })} style={{ width: 'auto' }}>{[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{'★'.repeat(n)}</option>)}</select>}
           {(rule.field === 'genre' || rule.field === 'search') && <input value={rule.value || ''} onChange={(e) => setRule({ ...rule, value: e.target.value })} placeholder="text…" style={{ maxWidth: 220 }} />}
         </div>
       ) : (
