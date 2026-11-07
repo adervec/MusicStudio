@@ -183,3 +183,14 @@ th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line
   .pb-now { width: 110px; }
   .pb-seek span { display: none; }
 }
+
+/* Composition plans, takes */
+.seg { display: inline-flex; } .seg button { border-radius: 0; } .seg button:first-child { border-radius: 7px 0 0 7px; } .seg button:last-child { border-radius: 0 7px 7px 0; margin-left: -1px; }
+.plan { margin-top: 6px; }
+.plan-chunk { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin-bottom: 6px; background: var(--bg); }
+.plan-chunk textarea, .plan-chunk input { margin-top: 4px; }
+.mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.takes { margin-top: 6px; border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; }
+.take-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; border-bottom: 1px solid var(--line); }
+.take-row:last-of-type { border-bottom: 0; }
+.take-row.now { box-shadow: inset 3px 0 0 var(--accent); padding-left: 4px; }

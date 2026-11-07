@@ -1,8 +1,9 @@
 import { safeUrl, normTitle } from '../album/library.js';
 import { useState } from 'react';
 import { uid, putClip, getClip, deleteClip } from '../state/db.js';
-import { MUSIC_MODELS, TTS_MODELS, MUSIC_PROMPT_MAX, LATEST_MUSIC_MODEL, musicModelFor, newTrackModel } from '../api/elevenlabs.js';
+import { TTS_MODELS, MUSIC_PROMPT_MAX, newTrackModel } from '../api/elevenlabs.js';
 import AttachmentStrip from './AttachmentStrip.jsx';
+import MusicFields, { QC_COLOR, qcTitle } from './MusicFields.jsx';
 import { clipDurationMs } from '../audio/wav.js';
 import { pickFile } from '../backup/fs.js';
 import { fmtDuration, fmtUsd, musicCost, ttsCost } from '../state/pricing.js';
@@ -11,23 +12,16 @@ import { isGap, trackKey, duplicateIds } from '../album/skeleton.js';
 import { usePlayer } from './usePlayer.js';
 import Waveform from './Waveform.jsx';
 
-const STYLE_PRESETS = [
-  'lo-fi hip-hop, mellow piano, vinyl crackle, 80 BPM', 'cinematic orchestral, epic, building strings',
-  'synthwave, retro, driving arpeggios, 110 BPM', 'ambient, ethereal pads, slow, no drums',
-  'jazz trio, warm, brushed drums, upright bass', 'darksynth, aggressive, industrial, 120 BPM',
-  'acoustic folk, fingerpicked guitar, intimate', 'house, four-on-the-floor, groovy bassline, 124 BPM',
-  'trailer hybrid, big percussion, tension', 'chiptune, upbeat, 8-bit, playful',
-];
 // The album builder: curate prompts, generate music, splice dialog / uploads, reorder, edit
 // (trim/fade/volume), and preview. `updateProject((prev)=>next)` persists.
-export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS_MODELS, backupReady, group, onTheme, coverUrl, updateProject, backupClip, writeSkeleton, onSetCover, onClearCover, onDuplicateAlbum, onCopyPath, onExport, onMetadata, onAttachments, onLoadSkeleton, onScanFolder, onListAlbumAudio, onLinkFile, onGenerate, onUpload, queued = 0, playlists, onAddToPlaylist, onPublish, publishName }) {
+export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS_MODELS, backupReady, group, onTheme, coverUrl, updateProject, backupClip, writeSkeleton, onSetCover, onClearCover, onDuplicateAlbum, onCopyPath, onExport, onMetadata, onAttachments, onLoadSkeleton, onScanFolder, onListAlbumAudio, onLinkFile, onGenerate, onUpload, onDeleteTakes, onInpaint, finetunes = [], queued = 0, playlists, onAddToPlaylist, onPublish, publishName }) {
   const tracks = project.tracks || [];
   const player = usePlayer();
   const [openEdit, setOpenEdit] = useState(() => new Set());
   const [sel, setSel] = useState(() => new Set());
   const toggleSel = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   async function deleteSelected() {
-    for (const id of sel) { const t = tracks.find((x) => x.id === id); if (t?.clipId) await deleteClip(t.clipId); if (player.playing === id) player.stop(); }
+    for (const id of sel) { const t = tracks.find((x) => x.id === id); for (const c of [t?.clipId, ...(t?.takes || []).map((k) => k.clipId)]) if (c) await deleteClip(c); if (player.playing === id) player.stop(); }
     setTracks((ts) => ts.filter((t) => !sel.has(t.id)));
     setSel(new Set());
   }
@@ -59,7 +53,7 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
 
   async function remove(t) {
     if (player.playing === t.id) player.stop();
-    if (t.clipId) await deleteClip(t.clipId);
+    for (const c of [t.clipId, ...(t.takes || []).map((k) => k.clipId)]) if (c) await deleteClip(c);
     setTracks((ts) => ts.filter((x) => x.id !== t.id));
   }
   function move(id, dir) {
@@ -166,6 +160,8 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
             <input type="checkbox" checked={sel.has(t.id)} onChange={() => toggleSel(t.id)} style={{ width: 'auto' }} title="Select track" />
             <span className={`badge ${t.type}`}>{t.type}</span>
             <button className="mini" onClick={() => patch(t.id, { fav: !t.fav })} title={t.fav ? 'Unfavorite' : 'Favorite'} style={{ color: t.fav ? 'var(--gold, #f5c451)' : 'var(--dim)', border: 'none', background: 'none', padding: 0 }}>{t.fav ? '★' : '☆'}</button>
+            {t.qc && <span className="badge" style={{ color: QC_COLOR[t.qc.grade], borderColor: QC_COLOR[t.qc.grade] }} title={qcTitle(t.qc)}>QC {t.qc.grade}{t.qc.flags?.length ? ' ⚠' : ''}</span>}
+            {(t.takes?.length || 0) > 0 && <span className="badge" title="Other takes of this track (open ▸ Takes below)">{t.takes.length + 1} takes</span>}
             {dups.has(t.id) && <span className="badge" style={{ color: 'var(--warn)', borderColor: 'var(--warn)' }} title="Same content as an earlier track — bulk-generate reuses its audio instead of paying again">⚠ dup</span>}
             <input className="grow" value={t.title} onChange={(e) => patch(t.id, { title: e.target.value })} />
             {t.clipId && <span className="dim" style={{ fontSize: 12 }}>{fmtDuration(t.durationMs)}</span>}
@@ -180,27 +176,7 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
 
           {t.clipId && <Waveform clipId={t.clipId} progress={player.playing === t.id ? (player.dur ? player.cur / player.dur : 0) : 0} onSeek={(frac) => { if (player.playing === t.id) player.seek(frac * (player.dur || 0)); else player.play(t, tracks); }} />}
 
-          {t.type === 'music' && (
-            <>
-              <label>Prompt</label>
-              <textarea value={t.prompt} onChange={(e) => patch(t.id, { prompt: e.target.value })} placeholder="e.g. Upbeat lo-fi hip-hop with mellow piano, warm vinyl crackle, 90 BPM" />
-              <div className="row" style={{ marginTop: 4 }}>
-                <span style={{ order: 2, marginLeft: 'auto', fontSize: 11, color: (t.prompt || '').length > MUSIC_PROMPT_MAX ? 'var(--bad)' : 'var(--dim)' }} title="ElevenLabs accepts up to 4,100 characters per prompt">{(t.prompt || '').length.toLocaleString()} / {MUSIC_PROMPT_MAX.toLocaleString()} chars</span>
-                <select value="" onChange={(e) => { if (e.target.value) patch(t.id, { prompt: (t.prompt ? t.prompt.trim() + ', ' : '') + e.target.value }); }} style={{ maxWidth: 240 }} title="Append a style to the prompt">
-                  <option value="">＋ add a style…</option>
-                  {STYLE_PRESETS.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-              <div className="row" style={{ marginTop: 6, flexWrap: 'wrap' }}>
-                <div><label>Length (sec)</label><input type="number" min="3" max="600" value={Math.round(t.lengthMs / 1000)} onChange={(e) => patch(t.id, { lengthMs: Math.max(3000, Math.min(600000, +e.target.value * 1000)) })} style={{ width: 90 }} /></div>
-                <div className="grow"><label>Model</label><select value={t.modelPinned ? musicModelFor(t) : 'latest'} onChange={(e) => patch(t.id, e.target.value === 'latest' ? { model: LATEST_MUSIC_MODEL, modelPinned: false } : { model: e.target.value, modelPinned: true })} title="Latest follows ElevenLabs' newest model automatically; pin one only to keep a specific model">
-                  <option value="latest">Latest — {MUSIC_MODELS[0].label.split(' — ')[0]} (recommended)</option>
-                  {MUSIC_MODELS.map((m) => <option key={m.id} value={m.id}>📌 Pin: {m.label}</option>)}
-                </select></div>
-                <label style={{ marginTop: 20 }}><input type="checkbox" checked={!!t.instrumental} onChange={(e) => patch(t.id, { instrumental: e.target.checked })} style={{ width: 'auto', marginRight: 5 }} />Instrumental</label>
-              </div>
-            </>
-          )}
+          {t.type === 'music' && <MusicFields t={t} patch={(up) => patch(t.id, up)} prefs={prefs} apiKey={apiKey} player={player} finetunes={finetunes} onDeleteTakes={onDeleteTakes} onInpaint={onInpaint} />}
           {t.type === 'dialog' && (
             <>
               <label>Text</label>
@@ -223,7 +199,7 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
 
           <div className="row" style={{ marginTop: 8, flexWrap: 'wrap' }}>
             {t.type !== 'upload' && (
-              <button className="mini" onClick={() => onGenerate([t.id])} disabled={t.status === 'gen' || t.status === 'queued' || (t.type === 'music' ? !t.prompt.trim() || t.prompt.length > MUSIC_PROMPT_MAX : !(t.text.trim() && t.voiceId))}>
+              <button className="mini" onClick={() => onGenerate([t.id])} disabled={t.status === 'gen' || t.status === 'queued' || (t.type === 'music' ? (t.usePlan ? !t.plan?.chunks?.length : !t.prompt?.trim() || t.prompt.length > MUSIC_PROMPT_MAX) : !(t.text.trim() && t.voiceId))}>
                 {t.status === 'gen' ? '… generating' : t.status === 'queued' ? '⏳ queued' : t.clipId ? '↻ Regenerate' : '✦ Generate'}
               </button>
             )}

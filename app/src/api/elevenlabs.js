@@ -40,25 +40,6 @@ async function errorFrom(r) {
   catch { return `ElevenLabs error ${r.status}`; }
 }
 
-// Generate a song from a text prompt → audio/mpeg Blob. lengthMs 3000–600000. Logs music spend.
-export async function composeMusic({ prompt, lengthMs = 60000, model = LATEST_MUSIC_MODEL, instrumental = false, apiKey }) {
-  const body = {
-    prompt: (prompt || '').trim(),
-    music_length_ms: Math.max(3000, Math.min(600000, Math.round(lengthMs))),
-    model_id: model,
-    force_instrumental: !!instrumental,
-  };
-  const r = await fetch(`${BASE}/music?output_format=mp3_44100_128`, {
-    method: 'POST',
-    headers: { 'xi-api-key': (apiKey || '').trim(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!r.ok) throw new Error(await errorFrom(r));
-  await recordUsage({ kind: 'music', model, source: 'compose', ms: body.music_length_ms, costUsd: musicCost(body.music_length_ms) });
-  spent();
-  return new Blob([await r.arrayBuffer()], { type: 'audio/mpeg' });
-}
-
 // Synthesize dialog/narration → audio/mpeg Blob. Logs tts spend.
 export async function tts({ text, voiceId, model = 'eleven_multilingual_v2', apiKey }) {
   const r = await fetch(`${BASE}/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`, {

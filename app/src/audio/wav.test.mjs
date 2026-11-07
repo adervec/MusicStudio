@@ -420,6 +420,101 @@ import { bufToB64, b64ToBuf } from '../state/db.js';
   assert.equal(planRefresh(scan(noId, 2000), groups, [p]).length, 1, 'matched by folder path when album.json has no id');
 }
 
+// ElevenLabs music helpers: multipart parsing, unzip, request bodies, plans, inpainting, LRC.
+{
+  const M = await import('../api/music.js');
+  const enc = new TextEncoder();
+  // multipart/mixed: JSON metadata part + binary audio part (CRLF framing, binary bytes incl. CR/LF).
+  const audioBytes = new Uint8Array([0xff, 0xfb, 0x0d, 0x0a, 0x2d, 0x2d, 1, 2]);
+  const mp = new Uint8Array([...enc.encode('--B1\r\nContent-Type: application/json\r\n\r\n{"song_metadata":{"title":"Neon Rain"}}\r\n--B1\r\nContent-Type: audio/mpeg\r\nContent-Disposition: attachment; filename="x.mp3"\r\n\r\n'), ...audioBytes, ...enc.encode('\r\n--B1--\r\n')]);
+  const parts = M.parseMultipart(mp, 'B1');
+  assert.equal(parts.length, 2);
+  assert.equal(JSON.parse(new TextDecoder().decode(parts[0].body)).song_metadata.title, 'Neon Rain');
+  assert.deepEqual([...parts[1].body], [...audioBytes], 'binary part intact, incl. embedded CR/LF and dashes');
+  // unzip: one stored + one deflated entry, built here with the native CompressionStream.
+  const deflate = async (b) => new Uint8Array(await new Response(new Blob([b]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer());
+  const mkzip = async (files) => {
+    const locals = [], central = []; let off = 0;
+    for (const f of files) {
+      const name = enc.encode(f.name), data = f.deflate ? await deflate(f.bytes) : f.bytes;
+      const lh = new Uint8Array(30 + name.length); const lv = new DataView(lh.buffer);
+      lv.setUint32(0, 0x04034b50, true); lv.setUint16(8, f.deflate ? 8 : 0, true); lv.setUint32(18, data.length, true); lv.setUint32(22, f.bytes.length, true); lv.setUint16(26, name.length, true); lh.set(name, 30);
+      const ch = new Uint8Array(46 + name.length); const cv = new DataView(ch.buffer);
+      cv.setUint32(0, 0x02014b50, true); cv.setUint16(10, f.deflate ? 8 : 0, true); cv.setUint32(20, data.length, true); cv.setUint32(24, f.bytes.length, true); cv.setUint16(28, name.length, true); cv.setUint32(42, off, true); ch.set(name, 46);
+      locals.push(lh, data); central.push(ch); off += lh.length + data.length;
+    }
+    const cdSize = central.reduce((s, c) => s + c.length, 0);
+    const e = new Uint8Array(22); const ev = new DataView(e.buffer); ev.setUint32(0, 0x06054b50, true); ev.setUint16(8, files.length, true); ev.setUint16(10, files.length, true); ev.setUint32(12, cdSize, true); ev.setUint32(16, off, true);
+    const all = [...locals, ...central, e]; const out = new Uint8Array(all.reduce((s, a) => s + a.length, 0)); let o = 0; for (const a of all) { out.set(a, o); o += a.length; } return out;
+  };
+  const vocals = enc.encode('vocals '.repeat(50)), drums = new Uint8Array([9, 8, 7]);
+  const files = await M.unzip(await mkzip([{ name: 'stems/vocals.mp3', bytes: vocals, deflate: true }, { name: 'drums.mp3', bytes: drums }]));
+  assert.deepEqual(files.map((f) => f.name), ['stems/vocals.mp3', 'drums.mp3']);
+  assert.deepEqual([...files[0].bytes], [...vocals], 'deflated entry restored');
+  assert.deepEqual([...files[1].bytes], [...drums], 'stored entry restored');
+  // Request bodies: prompt mode vs plan mode; v1 can't take a plan; seed + finetune pass through.
+  const t = { prompt: ' arps ', lengthMs: 999999, lyrics: 'la la', instrumental: false };
+  const b1 = M.composeBody(t, { model: 'music_v2_5', seed: 42, phonetic: true });
+  assert.deepEqual([b1.prompt, b1.music_length_ms, b1.lyrics_text, b1.seed, b1.use_phonetic_names, b1.composition_plan], ['arps', 600000, 'la la', 42, true, undefined]);
+  assert.equal(M.composeBody({ ...t, instrumental: true }, { model: 'music_v2_5' }).lyrics_text, undefined, 'instrumental → no lyrics');
+  const planned = { ...t, usePlan: true, plan: { chunks: [{ text: '[Intro]', duration_ms: 1000, positive_styles: ['synth', ''], ui: 'x' }] } };
+  const b2 = M.composeBody(planned, { model: 'music_v2_5', finetuneId: 'ft1', finetuneStrength: 5 });
+  assert.equal(b2.prompt, undefined); assert.equal(b2.composition_plan.chunks[0].duration_ms, 3000, 'chunk clamped to ≥3 s');
+  assert.deepEqual(b2.composition_plan.chunks[0].positive_styles, ['synth']); assert.equal(b2.composition_plan.chunks[0].ui, undefined);
+  assert.equal(b2.finetune_strength, 2);
+  assert.throws(() => M.composeBody(planned, { model: 'music_v1' }), /v2 or newer/);
+  // v1 sections → v2 chunks.
+  const ch = M.toChunks({ positive_global_styles: ['rock'], negative_global_styles: [], sections: [{ section_name: 'Verse', lines: ['a', 'b'], duration_ms: 8000, positive_local_styles: ['gritty'], negative_local_styles: [] }] });
+  assert.deepEqual(ch.chunks[0], { text: '[Verse]\na\nb', duration_ms: 8000, positive_styles: ['rock', 'gritty'], negative_styles: [], context_adherence: 'high' });
+  // Inpainting keeps both sides as audio references; tiny edges fold into the regenerated part.
+  const ip = M.inpaintPlan('S1', 60000, 20000, 30000, { text: '[Bridge]', positive_styles: ['choir'] });
+  assert.deepEqual(ip.chunks.map((c) => (c.song_id ? `ref ${c.range.start_ms}-${c.range.end_ms}` : `gen ${c.duration_ms}`)), ['ref 0-20000', 'gen 10000', 'ref 30000-60000']);
+  assert.equal(M.planMs(ip), 60000);
+  assert.deepEqual(M.inpaintPlan('S1', 60000, 1000, 58500, { text: '' }).chunks.map((c) => c.song_id ? 'ref' : 'gen'), ['gen'], 'edges < 3 s fold in');
+  assert.throws(() => M.inpaintPlan('S1', 60000, 10000, 11000, {}), /at least 3 seconds/);
+  // LRC: lines break on pauses / sentence ends; stamps are mm:ss.xx.
+  const words = [{ word: 'Neon', start_ms: 1000, end_ms: 1400 }, { word: 'rain.', start_ms: 1500, end_ms: 1900 }, { word: 'Falling', start_ms: 5200, end_ms: 5600 }, { word: 'down', start_ms: 5700, end_ms: 6000 }];
+  assert.equal(M.lrcFromWords(words, { title: 'T' }), '[ti:T]\n[00:01.00]Neon rain.\n[00:05.20]Falling down\n');
+  assert.equal(M.lyricsFromWords(words), 'Neon rain.\nFalling down');
+}
+
+// Takes: choosing a take swaps it with the current audio — nothing is ever lost; album.json carries plans/lyrics, not seeds.
+{
+  const T = await import('../album/takes.js');
+  const t = { id: 't', type: 'music', title: 'Rain', clipId: 'c1', backupFile: 'a.mp3', seed: 1, qc: { score: 70 }, repId: 'k1',
+    takes: [{ id: 'k2', clipId: 'c2', backupFile: 'b.mp3', seed: 2, qc: { score: 90 }, note: 'better vocals' }] };
+  const c = T.chooseTake(t, 'k2');
+  assert.deepEqual([c.clipId, c.backupFile, c.seed, c.repId, c.takeNote], ['c2', 'b.mp3', 2, 'k2', 'better vocals']);
+  assert.deepEqual(c.takes.map((k) => [k.id, k.clipId, k.seed]), [['k1', 'c1', 1]], 'old audio became a take');
+  assert.deepEqual(T.chooseTake(c, 'k1').clipId, 'c1', 'and back');
+  const est = T.estimateJobs([{ type: 'music', lengthMs: 60000, takesN: 2 }, { type: 'music', usePlan: true, plan: { chunks: [{ duration_ms: 30000 }] } }], { takes: 1 });
+  assert.equal(est.count, 3); assert.ok(Math.abs(est.usd - (musicCost(60000) * 2 + musicCost(30000))) < 1e-9);
+  const proj = { id: 'p', title: 'A', tracks: [{ id: 't', type: 'music', prompt: 'x', seed: 5, lyrics: 'hey', usePlan: true, plan: { chunks: [{ text: '[Intro]', duration_ms: 8000 }] }, takesN: 3 }] };
+  const j = buildAlbumJson(proj);
+  assert.deepEqual([j.tracks[0].lyrics, j.tracks[0].usePlan, j.tracks[0].takesN, j.tracks[0].seed], ['hey', true, 3, 5]);
+  j.tracks[0].seed = 999; j.tracks[0].plan = { sections: [{ section_name: 'Outro', lines: [], duration_ms: 9000 }] }; j.tracks[0].takesN = 9;
+  const m = mergeSkeleton(proj, j).tracks[0];
+  assert.equal(m.seed, 5, 'seed is app-managed'); assert.equal(m.takesN, 4, 'takes clamped');
+  assert.equal(m.plan.chunks[0].text, '[Outro]', 'an agent-written v1-style plan is normalized to chunks');
+}
+
+// Take quality check: silence, clipping and quiet takes are flagged and score lower.
+{
+  const { qcMetrics, qcGrade } = await import('./qc.js');
+  const sr = 8000, sec = 10;
+  const tone = (amp, f = 220) => Float32Array.from({ length: sr * sec }, (_, i) => amp * Math.sin(2 * Math.PI * f * i / sr));
+  const good = qcGrade(qcMetrics([tone(0.5), tone(0.5)], sr), sec);
+  assert.equal(good.grade, 'A'); assert.deepEqual(good.flags, []);
+  assert.ok(qcGrade(qcMetrics([new Float32Array(sr * sec)], sr)).flags.includes('silent'));
+  assert.ok(qcGrade(qcMetrics([tone(1.4)], sr)).flags.includes('clipping'));
+  assert.ok(qcGrade(qcMetrics([tone(0.005)], sr)).flags.includes('very quiet'));
+  const gappy = tone(0.5); gappy.fill(0, sr * 3, sr * 8);
+  const gm = qcMetrics([gappy], sr);
+  assert.ok(gm.maxGapSec >= 4.9 && qcGrade(gm).flags.some((f) => f.endsWith('gap')));
+  assert.ok(good.score > qcGrade(gm).score, 'best-of-N picks the clean take');
+  assert.ok(qcGrade(qcMetrics([tone(0.5)], sr), 30).flags.includes('too short'));
+}
+
 // Markdown preview: escapes HTML first (no injection), renders the safe subset, refuses non-http links.
 {
   const { renderMarkdown } = await import('../album/markdown.js');

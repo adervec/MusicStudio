@@ -3,6 +3,7 @@
 // of truth a *separate* Claude Code session reads/writes to author the album skeleton. Pure — no db,
 // no browser; see ../audio/wav.test.mjs.
 import { sanitizeFilename } from '../audio/wav.js';
+import { toChunks } from '../api/music.js';
 
 const rid = () => 't_' + Math.random().toString(36).slice(2, 9);
 
@@ -78,6 +79,8 @@ export function buildAlbumJson(project) {
       model: t.modelPinned && t.model ? t.model : 'latest', instrumental: !!t.instrumental, // app-managed
       text: t.text || '', voiceId: t.voiceId || '', voiceName: t.voiceName || '',
       gain: t.gain ?? 1, sourceUrl: t.sourceUrl || '',
+      lyrics: t.lyrics || '', usePlan: !!t.usePlan, plan: t.plan || null, respectDurations: t.respectDurations !== false, takesN: t.takesN || 1,
+      seed: Number.isInteger(t.seed) ? t.seed : null, takes: (t.takes || []).length, // app-managed
       generated: !!t.clipId, file: t.backupFile || null, // written by the app; agents leave these alone
     })),
     // Reference material for the agent — style guides, inspirations, notes. Files live in attachments/.
@@ -105,6 +108,11 @@ export function mergeSkeleton(project, json) {
       voiceName: j.voiceName ?? prev.voiceName ?? '',
       gain: j.gain ?? prev.gain ?? 1,
       sourceUrl: j.sourceUrl ?? prev.sourceUrl ?? '',
+      lyrics: j.lyrics ?? prev.lyrics ?? '',
+      usePlan: j.usePlan ?? prev.usePlan ?? false,
+      plan: j.plan !== undefined ? toChunks(j.plan) : (prev.plan || null),
+      respectDurations: j.respectDurations ?? prev.respectDurations ?? true,
+      takesN: Math.max(1, Math.min(4, +(j.takesN ?? prev.takesN ?? 1) || 1)),
       importFile: j.importFile || undefined, // pre-existing audio to attach (backfill); app-consumed
       clipId: prev.clipId || null,          // never invent audio from a skeleton
       durationMs: prev.durationMs || 0,
@@ -126,7 +134,7 @@ export function mergeSkeleton(project, json) {
 // A track is a "generation gap" if it's a song/dialog with the input it needs but no audio yet.
 export function isGap(t) {
   return (t.type === 'music' || t.type === 'dialog') && !t.clipId
-    && (t.type === 'music' ? !!(t.prompt && t.prompt.trim()) : !!(t.text && t.text.trim() && t.voiceId));
+    && (t.type === 'music' ? !!((t.usePlan && t.plan?.chunks?.length) || (t.prompt && t.prompt.trim())) : !!(t.text && t.text.trim() && t.voiceId));
 }
 export function countGaps(project) { return (project?.tracks || []).filter(isGap).length; }
 
@@ -279,6 +287,18 @@ Rewrite \`tracks[]\` into a complete skeleton that delivers the brief:
     "voiceName": string,          // dialog only — describe the voice you want
     "gain": number,               // 0..1.5 (1 = unchanged)
     "sourceUrl": string,          // OPTIONAL: web page the song was made on (e.g. its ElevenLabs song page)
+    "lyrics": string,             // music only, OPTIONAL: lyrics for a prompt-mode song (ignored when instrumental)
+    "usePlan": boolean,           // music only: true = generate from "plan" instead of "prompt"
+    "plan": { "chunks": [         // music only, OPTIONAL composition plan (Music v2+): the song section by section
+      { "text": "[Verse 1]\nlyric line\nlyric line {inline direction}",  // optional [Section] + up to 30 lines ≤200 chars
+        "duration_ms": 20000,      // 3000..120000 per chunk
+        "positive_styles": ["dark synthwave", "120 BPM"],  // first chunk sets the overall genre/tone
+        "negative_styles": [],     // only to rule something out
+        "context_adherence": "high" } ] },  // low | medium | high
+    "respectDurations": boolean,  // plan mode: hold section durations strictly (default true)
+    "takesN": number,             // 1..4 generations per Generate; the app keeps the best, the rest as takes
+    "seed": number|null,          // app-managed — DO NOT edit
+    "takes": number,              // app-managed — DO NOT edit
     "importFile": string,         // OPTIONAL: filename of an EXISTING audio file in THIS album folder to
                                   //   attach as this track's audio (backfill; see below). e.g. "01 intro.mp3"
     "generated": boolean,         // app-managed — DO NOT edit
