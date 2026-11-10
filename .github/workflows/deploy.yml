@@ -37,7 +37,7 @@ jobs:
         run: npm ci
 
       - name: Self-check
-        run: node src/audio/wav.test.mjs
+        run: npm test
 
       # Project site is served from https://adervec.github.io/MusicStudio/,
       # so assets must resolve under the /MusicStudio/ base path.

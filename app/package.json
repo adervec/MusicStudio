@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node src/audio/wav.test.mjs"
   },
   "dependencies": {
     "idb": "^8.0.3",
