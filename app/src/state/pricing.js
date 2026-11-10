@@ -9,7 +9,8 @@ export function musicCost(ms = 0) { return (ms / 60000) * MUSIC_USD_PER_MIN; }
 export const TTS_USD_PER_CHAR = 0.00018; // ≈ $0.18 / 1,000 chars
 export function ttsCost(chars = 0) { return chars * TTS_USD_PER_CHAR; }
 
-const dayOf = (ts) => new Date(ts).toISOString().slice(0, 10);
+// the LOCAL calendar day of a spend (toISOString is UTC, which would file a 22:00 spend at UTC-3 under tomorrow)
+const dayOf = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 
 // Aggregate usage records → dashboard totals. Each entry: { ts, kind:'music'|'tts', model, source,
 // ms?, chars?, costUsd }.

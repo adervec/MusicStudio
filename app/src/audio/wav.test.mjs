@@ -565,4 +565,10 @@ import { bufToB64, b64ToBuf } from '../state/db.js';
   assert.match(src('../components/Settings.jsx'), /indexedDB\.deleteDatabase\('MusicStudio'\)/, 'Settings has an erase-everything control');
 }
 
+// House standard: a day is the LOCAL day. A 22:30 spend belongs to that evening (UTC would say tomorrow west of UTC).
+{
+  const late = new Date(2026, 2, 10, 22, 30).getTime();
+  assert.deepEqual(Object.keys(summarizeUsage([{ ts: late, kind: 'music', costUsd: 1 }]).byDay), ['2026-03-10'], 'spend is filed under the local day');
+}
+
 console.log('ok — wav/pricing/skeleton/path/import/edits/gaps/playlists/backup/paste/sync/catalog/library/markdown self-check passed');
