@@ -1196,7 +1196,7 @@ export default function App() {
           onClose={() => setModal(null)} onVoices={setVoices}
           onSave={async (k, p) => { await setSetting('apiKey', k); await setSetting('prefs', p); setApiKey(k); setPrefs(p); setModal(null); if (k && !voices.length) listVoices(k).then(setVoices).catch(() => {}); if (k) listTtsModels(k).then((m) => m.length && setTtsModels(m)).catch(() => {}); }}
           onPickBackup={pickBackup} onClearBackup={dropBackup} onPickPublish={pickPublish} onClearPublish={dropPublish} onManageSync={() => setModal('sync')} onExportData={exportData} onImportData={importData}
-          driveOn={drive} driveEmail={driveProfile()?.email} driveAvailable={!!driveClientId(prefs)} cloudBusy={cloudBusy}
+          driveOn={drive} driveEmail={driveProfile()?.email} drivePicture={driveProfile()?.picture} driveAvailable={!!driveClientId(prefs)} cloudBusy={cloudBusy}
           onConnectDrive={async () => { await setSetting('driveOn', true); connectDrive(); }}
           onDisconnectDrive={async () => { await setSetting('driveOn', false); disconnectDrive(); }}
           onPushCatalog={async () => { setCloudBusy('Pushing…'); try { const c = await pushCatalog(); showToast(`☁ Published ${c.albums.length} albums to Drive`); } catch (e) { showToast('Push failed: ' + (e.message || e)); } setCloudBusy(''); }} />

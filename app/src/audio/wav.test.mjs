@@ -555,4 +555,12 @@ import { bufToB64, b64ToBuf } from '../state/db.js';
   assert.deepEqual(parseCsv('a\tb\n1\t2', '\t'), [['a', 'b'], ['1', '2']]);
 }
 
+// House standard: when Drive is connected, the Google account picture is shown beside the name.
+{
+  const { readFileSync } = await import('node:fs');
+  const src = (f) => readFileSync(new URL(f, import.meta.url), 'utf8');
+  assert.match(src('../components/Settings.jsx'), /<img src=\{drivePicture\}[^>]*referrerPolicy="no-referrer"/, 'Settings draws the Drive account picture');
+  assert.match(src('../App.jsx'), /drivePicture=\{driveProfile\(\)\?\.picture\}/, 'App passes the picture to Settings');
+}
+
 console.log('ok — wav/pricing/skeleton/path/import/edits/gaps/playlists/backup/paste/sync/catalog/library/markdown self-check passed');

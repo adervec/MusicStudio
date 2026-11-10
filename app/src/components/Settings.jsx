@@ -6,7 +6,7 @@ import { dirPickerSupported } from '../backup/fs.js';
 
 // API key, default models/voice, and the local backup folder. Key + prefs persist on-device.
 export default function Settings({ finetunes = [], projects = [], onRefreshFinetunes, onCreateFinetune, ttsModels, apiKey, prefs, voices, backupName, publishName, onClose, onSave, onVoices, onPickBackup, onClearBackup, onPickPublish, onClearPublish, onManageSync, onExportData, onImportData,
-  driveOn, driveEmail, driveAvailable, cloudBusy, onConnectDrive, onDisconnectDrive, onPushCatalog }) {
+  driveOn, driveEmail, drivePicture, driveAvailable, cloudBusy, onConnectDrive, onDisconnectDrive, onPushCatalog }) {
   const [key, setKey] = useState(apiKey || '');
   const [p, setP] = useState(prefs);
   const [testing, setTesting] = useState('');
@@ -97,7 +97,8 @@ export default function Settings({ finetunes = [], projects = [], onRefreshFinet
 
       <div className="section">Google Drive (phone remote)</div>
       <div className="row">
-        <div className="grow">{driveOn ? <>Connected{driveEmail ? <> as <b>{driveEmail}</b></> : ''}</> : <span className="dim">Not connected.</span>}</div>
+        <div className="grow">{driveOn ? <>{/* the Google account picture shows whose Drive this is */}
+          {drivePicture ? <img src={drivePicture} alt="" referrerPolicy="no-referrer" style={{ width: 22, height: 22, borderRadius: '50%', verticalAlign: 'middle', marginRight: 6 }} /> : null}Connected{driveEmail ? <> as <b>{driveEmail}</b></> : ''}</> : <span className="dim">Not connected.</span>}</div>
         <button className="mini" onClick={driveOn ? onDisconnectDrive : onConnectDrive} disabled={!driveAvailable || !!cloudBusy}>{cloudBusy || (driveOn ? 'Disconnect' : 'Connect Google Drive')}</button>
         {driveOn && publishName && <button className="mini" onClick={onPushCatalog} disabled={!!cloudBusy}>☁ Push library</button>}
       </div>
