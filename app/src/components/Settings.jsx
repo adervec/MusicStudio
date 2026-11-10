@@ -35,6 +35,10 @@ export default function Settings({ finetunes = [], projects = [], onRefreshFinet
       {credits && <p className="note" style={{ color: credits.remaining <= 0 ? 'var(--bad)' : 'var(--good)' }}>💳 {credits.remaining.toLocaleString()} of {credits.limit.toLocaleString()} credits remaining{credits.tier ? ` · ${credits.tier}` : ''}</p>}
       <p className="note">Stored on this device only; sent solely to ElevenLabs. Get one at elevenlabs.io → Profile → API Keys.</p>
 
+      <div className="section">Font</div>
+      {/* shared picker from https://adervec.github.io/font.js; the choice applies to every app by this maker */}
+      <app-font-picker />
+
       <div className="section">Defaults</div>
       <label>Music model</label>
       <select value={p.musicModel || 'latest'} onChange={(e) => set('musicModel', e.target.value)}>
