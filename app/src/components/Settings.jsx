@@ -65,6 +65,16 @@ export default function Settings({ finetunes = [], projects = [], onRefreshFinet
       <label>Gap between album tracks (ms)</label>
       <input type="number" min="0" max="5000" value={p.gapMs} onChange={(e) => set('gapMs', +e.target.value)} />
 
+      <div className="section">Erase everything</div>
+      <p className="note">Deletes every album, generated audio clip, the spend log, your API key and all settings from this browser. Files already in your backup folder and on Google Drive are not touched.</p>
+      {/* Only this app's own data: every app by this maker shares one origin, so never localStorage.clear(). */}
+      <button className="mini" onClick={() => {
+        if (!window.confirm('Erase ALL Music Studio data in this browser, including generated audio you paid credits for?\n\nThis cannot be undone. Make sure your backup folder is up to date first.')) return;
+        Object.keys(localStorage).filter((k) => k.startsWith('ms-')).forEach((k) => localStorage.removeItem(k));
+        const del = indexedDB.deleteDatabase('MusicStudio');
+        del.onsuccess = del.onerror = del.onblocked = () => window.location.reload();
+      }}>Erase everything…</button>
+
       <div className="section">Finetunes — train a model on your own songs</div>
       <FinetunePanel finetunes={finetunes} projects={projects} onRefresh={onRefreshFinetunes} onCreate={onCreateFinetune} hasKey={!!apiKey} />
 

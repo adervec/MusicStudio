@@ -561,6 +561,8 @@ import { bufToB64, b64ToBuf } from '../state/db.js';
   const src = (f) => readFileSync(new URL(f, import.meta.url), 'utf8');
   assert.match(src('../components/Settings.jsx'), /<img src=\{drivePicture\}[^>]*referrerPolicy="no-referrer"/, 'Settings draws the Drive account picture');
   assert.match(src('../App.jsx'), /drivePicture=\{driveProfile\(\)\?\.picture\}/, 'App passes the picture to Settings');
+  // ...and Settings can erase this app's own data without touching the other apps on the same origin.
+  assert.match(src('../components/Settings.jsx'), /indexedDB\.deleteDatabase\('MusicStudio'\)/, 'Settings has an erase-everything control');
 }
 
 console.log('ok — wav/pricing/skeleton/path/import/edits/gaps/playlists/backup/paste/sync/catalog/library/markdown self-check passed');
