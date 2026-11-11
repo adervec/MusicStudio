@@ -113,6 +113,22 @@ export default function Cowork({ projects, groups, onClose }) {
           try { localStorage.setItem('ms-coach-reply', text); } catch { /* quota */ }
           setReply(text);
         },
+        // cowork v2 (house standard): review the reply before it replaces the current one; undo from the history
+        channels: {
+          coach: {
+            label: 'Album coach',
+            preview: (r) => [{ id: 'reply', label: 'Show this advice in Music Studio (replaces the current one)',
+              detail: (typeof r === 'string' ? r : (r && (r.reply || (r.payload && r.payload.reply))) || '').slice(0, 400) }],
+            apply: (r) => {
+              let prev = ''; try { prev = localStorage.getItem('ms-coach-reply') || ''; } catch { /* private mode */ }
+              const text = typeof r === 'string' ? r : (r && (r.reply || (r.payload && r.payload.reply))) || JSON.stringify(r, null, 2);
+              try { localStorage.setItem('ms-coach-reply', text); } catch { /* quota */ }
+              setReply(text);
+              return { summary: 'new advice shown', undo: { prev } };
+            },
+            undo: (d) => { try { localStorage.setItem('ms-coach-reply', d.prev || ''); } catch { /* quota */ } setReply(d.prev || ''); },
+          },
+        },
       });
     });
     return () => { dead = true; };

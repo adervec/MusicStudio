@@ -7,7 +7,8 @@
    "You are told when a new version is ready, and if something goes wrong you see a message with a Reload button instead of a frozen screen.",
    "When Google Drive is connected, your Google profile picture shows beside the account.",
    "Settings has an Erase everything button that removes all Music Studio data from this browser, after asking. Your backup folder and Drive are not touched.",
-   "The spend log files each charge under your local day, so a late-evening generation no longer counts toward tomorrow."
+   "The spend log files each charge under your local day, so a late-evening generation no longer counts toward tomorrow.",
+   "AI cowork sync now shows the agent's advice for review before it replaces yours, can run on a schedule from one computer, keeps a history, and can undo."
   ]
  },
  {
