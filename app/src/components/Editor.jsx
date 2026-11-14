@@ -214,7 +214,7 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
                 <div><label>{t('Length (s, 0 = auto)')}</label><input type="number" min="0" max="30" step="0.5" value={tk.sfxDuration || 0} onChange={(e) => patch(tk.id, { sfxDuration: Math.max(0, Math.min(30, +e.target.value)) })} style={{ width: 90 }} /></div>
                 <div><label>{t('Follow prompt')}</label><input type="range" min="0" max="1" step="0.05" value={tk.promptInfluence ?? 0.3} onChange={(e) => patch(tk.id, { promptInfluence: +e.target.value })} style={{ width: 110 }} /></div>
                 <div className="grow"><label>{t('Model')}</label><select value={tk.sfxModel || SFX_MODELS[0].id} onChange={(e) => patch(tk.id, { sfxModel: e.target.value })}>{SFX_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select></div>
-                <label style={{ marginTop: 20 }}><input type="checkbox" checked={!!tk.loop} onChange={(e) => patch(tk.id, { loop: e.target.checked })} style={{ width: 'auto', marginRight: 5 }} />{t('Loop seamlessly')}</label>
+                <label style={{ marginTop: 20 }}><input type="checkbox" checked={!!tk.loop} onChange={(e) => patch(tk.id, { loop: e.target.checked })} style={{ width: 'auto', marginInlineEnd: 5 }} />{t('Loop seamlessly')}</label>
               </div>
             </>
           )}

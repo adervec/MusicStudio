@@ -33,8 +33,8 @@ export default function Attachments({ title = 'Album attachments', where = 'albu
       <div className="section">{t('Add')}</div>
       <div className="row" style={{ gap: 8 }}>
         <label style={{ margin: 0 }}>{t('Source:')}</label>
-        <label style={{ margin: 0 }}><input type="radio" checked={source === 'hand'} onChange={() => setSource('hand')} style={{ width: 'auto', marginRight: 4 }} />{t('By hand')}</label>
-        <label style={{ margin: 0 }}><input type="radio" checked={source === 'ai'} onChange={() => setSource('ai')} style={{ width: 'auto', marginRight: 4 }} />{t('AI-generated')}</label>
+        <label style={{ margin: 0 }}><input type="radio" checked={source === 'hand'} onChange={() => setSource('hand')} style={{ width: 'auto', marginInlineEnd: 4 }} />{t('By hand')}</label>
+        <label style={{ margin: 0 }}><input type="radio" checked={source === 'ai'} onChange={() => setSource('ai')} style={{ width: 'auto', marginInlineEnd: 4 }} />{t('AI-generated')}</label>
       </div>
       <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('Note title (e.g. Style guide, Mood board notes)')} style={{ marginTop: 6 }} />
       <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={t('Write or paste a note / style guide / inspiration…')} rows={4} style={{ marginTop: 6 }} />

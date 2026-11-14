@@ -8,7 +8,7 @@ export default function ConfirmSpend({ ask, onConfirm, onCancel }) {
   const [dontAsk, setDontAsk] = useState(false);
   return (
     <Dialog title={t.n('Generate {n} item — {album}', 'Generate {n} items — {album}', ask.count, { album: ask.album })} onClose={onCancel} width={560}
-      footer={<><label className="row" style={{ margin: 0, marginRight: 'auto' }}><input type="checkbox" style={{ width: 'auto' }} checked={dontAsk} onChange={(e) => setDontAsk(e.target.checked)} />{' '}{t('Don\'t ask again (Settings can turn it back on)')}</label>
+      footer={<><label className="row" style={{ margin: 0, marginInlineEnd: 'auto' }}><input type="checkbox" style={{ width: 'auto' }} checked={dontAsk} onChange={(e) => setDontAsk(e.target.checked)} />{' '}{t('Don\'t ask again (Settings can turn it back on)')}</label>
         <button onClick={onCancel}>{t('Cancel')}</button>
         <button className="primary" autoFocus onClick={() => onConfirm(dontAsk)}>{t('Generate')}{ask.usd > 0 ? ` · ≈ ${fmtUsd(ask.usd)}` : ''}</button></>}>
       <p className="note">{ask.usd > 0 ? <>{t('Estimated ≈')}{' '}<b>{fmtUsd(ask.usd)}</b>{ask.ms ? t(' for {duration} of music', { duration: fmtDuration(ask.ms) }) : ''}.</> : <>{t('Billed in ElevenLabs credits — no published dollar price for this (watch the 💲 credit bar).')}</>}{' '}{t('Runs in the background queue; results land in this album whatever you open meanwhile.')}</p>

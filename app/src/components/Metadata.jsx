@@ -24,7 +24,7 @@ export default function Metadata({ project, onChange, onClose }) {
             {f.type === 'textarea'
               ? <textarea value={meta[f.key] || ''} onChange={(e) => setMeta(f.key, e.target.value)} />
               : f.type === 'checkbox'
-                ? <label style={{ margin: '4px 0' }}><input type="checkbox" checked={!!meta[f.key]} onChange={(e) => setMeta(f.key, e.target.checked)} style={{ width: 'auto', marginRight: 6 }} />{t('Yes')}</label>
+                ? <label style={{ margin: '4px 0' }}><input type="checkbox" checked={!!meta[f.key]} onChange={(e) => setMeta(f.key, e.target.checked)} style={{ width: 'auto', marginInlineEnd: 6 }} />{t('Yes')}</label>
                 : <input type={f.type || 'text'} value={meta[f.key] ?? ''} onChange={(e) => setMeta(f.key, f.type === 'number' ? (e.target.value === '' ? '' : +e.target.value) : e.target.value)} />}
           </div>
         ))}

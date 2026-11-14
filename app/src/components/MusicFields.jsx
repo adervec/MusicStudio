@@ -55,7 +55,7 @@ export default function MusicFields({ t: tk, patch, prefs, apiKey, player, finet
           <label>{t('Prompt')}</label>
           <textarea value={tk.prompt} onChange={(e) => patch({ prompt: e.target.value })} placeholder={t('e.g. Upbeat lo-fi hip-hop with mellow piano, warm vinyl crackle, 90 BPM')} />
           <div className="row" style={{ marginTop: 4 }}>
-            <span style={{ order: 2, marginLeft: 'auto', fontSize: 11, color: (tk.prompt || '').length > MUSIC_PROMPT_MAX ? 'var(--bad)' : 'var(--dim)' }} title={t('ElevenLabs accepts up to 4,100 characters per prompt')}>{t('{localeString} / {localeString2} chars', { localeString: fmtNum((tk.prompt || '').length), localeString2: fmtNum(MUSIC_PROMPT_MAX) })}</span>
+            <span style={{ order: 2, marginInlineStart: 'auto', fontSize: 11, color: (tk.prompt || '').length > MUSIC_PROMPT_MAX ? 'var(--bad)' : 'var(--dim)' }} title={t('ElevenLabs accepts up to 4,100 characters per prompt')}>{t('{localeString} / {localeString2} chars', { localeString: fmtNum((tk.prompt || '').length), localeString2: fmtNum(MUSIC_PROMPT_MAX) })}</span>
             <select value="" onChange={(e) => { if (e.target.value) patch({ prompt: (tk.prompt ? tk.prompt.trim() + ', ' : '') + e.target.value }); }} style={{ maxWidth: 240 }} title={t('Append a style to the prompt')}>
               <option value="">{t('＋ add a style…')}</option>
               {STYLE_PRESETS.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -74,7 +74,7 @@ export default function MusicFields({ t: tk, patch, prefs, apiKey, player, finet
           {MUSIC_MODELS.map((m) => <option key={m.id} value={m.id}>{t('📌 Pin: {label}', { label: m.label })}</option>)}
         </select></div>
         <div><label>{t('Takes')}</label><select value={tk.takesN || prefs.takes || 1} onChange={(e) => patch({ takesN: +e.target.value })} style={{ width: 70 }} title={t('Generations per Generate — the best (quality check) becomes the song, the rest are kept as takes')}>{[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}</select></div>
-        <label style={{ marginTop: 20 }}><input type="checkbox" checked={!!tk.instrumental} onChange={(e) => patch({ instrumental: e.target.checked })} style={{ width: 'auto', marginRight: 5 }} />{t('Instrumental')}</label>
+        <label style={{ marginTop: 20 }}><input type="checkbox" checked={!!tk.instrumental} onChange={(e) => patch({ instrumental: e.target.checked })} style={{ width: 'auto', marginInlineEnd: 5 }} />{t('Instrumental')}</label>
         <button className="mini" style={{ marginTop: 18 }} onClick={() => setAdv((v) => !v)}>{adv ? '▾' : '▸'}{' '}{t('More')}</button>
       </div>
       {adv && (

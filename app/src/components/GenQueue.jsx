@@ -9,7 +9,7 @@ export default function GenQueue({ jobs, onCancel, onRetry, onClear, onOpenAlbum
   const waiting = jobs.filter((j) => j.state === 'queued').length;
   return (
     <Dialog title={t('✦ Generation queue')} onClose={onClose} width={640}
-      footer={<><span className="dim" style={{ fontSize: 12, marginRight: 'auto' }}>{t('Runs in the background — each result goes to its own album and folder, whatever you have open.')}</span>
+      footer={<><span className="dim" style={{ fontSize: 12, marginInlineEnd: 'auto' }}>{t('Runs in the background — each result goes to its own album and folder, whatever you have open.')}</span>
         <button onClick={onClear} disabled={!jobs.some((j) => j.state !== 'queued' && j.state !== 'running')}>{t('Clear finished')}</button>
         <button className="primary" onClick={onClose}>{t('Close')}</button></>}>
       {!jobs.length && <p className="note">{t('Nothing queued.')}</p>}

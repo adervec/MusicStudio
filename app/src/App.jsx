@@ -597,7 +597,7 @@ export default function App() {
   function startResize(e) {
     e.preventDefault();
     let latest = sidebarW;
-    const move = (ev) => { latest = Math.min(560, Math.max(180, ev.clientX)); setSidebarW(latest); };
+    const move = (ev) => { latest = Math.min(560, Math.max(180, document.documentElement.dir === 'rtl' ? window.innerWidth - ev.clientX : ev.clientX)); setSidebarW(latest); };
     const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); document.body.style.userSelect = ''; setSetting('sidebarW', latest); };
     document.body.style.userSelect = 'none';
     window.addEventListener('mousemove', move);

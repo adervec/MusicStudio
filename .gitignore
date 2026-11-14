@@ -3,3 +3,6 @@ dist/
 .vite/
 *.local
 .DS_Store
+
+# i18n working files (translation to-do lists)
+app/public/locales/_todo/

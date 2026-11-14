@@ -61,8 +61,8 @@ export default function Export({ project, backupDir, backupName, albumDir, gapMs
       footer={<><button onClick={onClose}>{t('Close')}</button><button className="primary" onClick={run} disabled={!ready.length || !!busy}>{busy || t('Export')}</button></>}>
       {!ready.length ? <p className="note">{t('No generated tracks yet. Generate or upload audio first.')}</p> : <>
         <p className="note">{t.n('{n} track', '{n} tracks', ready.length)}{' '}{t('ready · destination:')}{' '}{backupName ? <b>{backupName}</b> : t('browser download')}</p>
-        <label><input type="radio" name="m" checked={mode === 'tracks'} onChange={() => setMode('tracks')} style={{ width: 'auto', marginRight: 6 }} />{t('Separate track files (originals + .m3u; edited tracks & cover baked in)')}</label>
-        <label><input type="radio" name="m" checked={mode === 'album'} onChange={() => setMode('album')} style={{ width: 'auto', marginRight: 6 }} />{t('One mixed album WAV (trim/fade/volume applied)')}</label>
+        <label><input type="radio" name="m" checked={mode === 'tracks'} onChange={() => setMode('tracks')} style={{ width: 'auto', marginInlineEnd: 6 }} />{t('Separate track files (originals + .m3u; edited tracks & cover baked in)')}</label>
+        <label><input type="radio" name="m" checked={mode === 'album'} onChange={() => setMode('album')} style={{ width: 'auto', marginInlineEnd: 6 }} />{t('One mixed album WAV (trim/fade/volume applied)')}</label>
         {mode === 'album' && (
           <div className="row" style={{ marginTop: 6 }}>
             <label style={{ margin: 0 }}>{t('Crossfade (sec, 0 = {gapMs}ms gaps)', { gapMs: gapMs })}</label>

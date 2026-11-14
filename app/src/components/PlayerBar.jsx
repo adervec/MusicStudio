@@ -32,7 +32,7 @@ export default function PlayerBar({ info, onOpenAlbum }) {
               const mx = meta(x);
               return (
                 <div key={x.id + ':' + i} className={`queue-row${i === p.index ? ' now' : ''}${i < p.index ? ' past' : ''}`}>
-                  <span className="dim" style={{ width: 26, textAlign: 'right', fontSize: 11 }}>{i === p.index ? (p.paused ? '❚❚' : '♪') : i + 1}</span>
+                  <span className="dim" style={{ width: 26, textAlign: 'end', fontSize: 11 }}>{i === p.index ? (p.paused ? '❚❚' : '♪') : i + 1}</span>
                   <span className="grow" style={{ minWidth: 0, cursor: 'pointer' }} onClick={() => p.playIndex(i)} title={t('Play this')}>
                     <div className="ell">{mx.title || t('Untitled')}</div>
                     <div className="ell dim" style={{ fontSize: 11 }}>{mx.album || ''}</div>

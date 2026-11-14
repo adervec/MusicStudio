@@ -32,8 +32,8 @@ export default function PlaylistView({ playlist, projects, groups, onChange, onR
         <button className="mini danger" onClick={onDelete}>{t('🗑 Delete')}</button>
       </div>
       <div className="row" style={{ marginBottom: 8, gap: 10 }}>
-        <label style={{ margin: 0 }}><input type="radio" checked={playlist.kind === 'static'} onChange={() => set({ kind: 'static' })} style={{ width: 'auto', marginRight: 4 }} />{t('Static (hand-picked)')}</label>
-        <label style={{ margin: 0 }}><input type="radio" checked={playlist.kind === 'dynamic'} onChange={() => set({ kind: 'dynamic' })} style={{ width: 'auto', marginRight: 4 }} />{t('Dynamic (rule)')}</label>
+        <label style={{ margin: 0 }}><input type="radio" checked={playlist.kind === 'static'} onChange={() => set({ kind: 'static' })} style={{ width: 'auto', marginInlineEnd: 4 }} />{t('Static (hand-picked)')}</label>
+        <label style={{ margin: 0 }}><input type="radio" checked={playlist.kind === 'dynamic'} onChange={() => set({ kind: 'dynamic' })} style={{ width: 'auto', marginInlineEnd: 4 }} />{t('Dynamic (rule)')}</label>
         <div className="grow" />
         <button className="primary" onClick={() => player.playQueue(tracks)} disabled={!tracks.length}>{t('▶ Play all ({count})', { count: tracks.length })}</button>
       </div>

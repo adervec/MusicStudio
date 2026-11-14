@@ -58,7 +58,7 @@ export default function BuildAlbum({ groups, busy, onCreate, onClose }) {
       footer={step === 1
         ? <><button onClick={onClose}>{t('Cancel')}</button><button className="primary" disabled={!prompts.length && !audio.length} onClick={next}>{t.n('Next: pair ({n} prompt, {count} audio) ›', 'Next: pair ({n} prompts, {count} audio) ›', prompts.length, { count: audio.length })}</button></>
         : <><button onClick={() => setStep(1)}>{t('‹ Back')}</button>
-          <span className="dim" style={{ fontSize: 12, marginRight: 'auto' }}>{t('{both} paired · {prompt} prompt-only (gaps) · {audio} audio-only', { both: counts.both, prompt: counts.prompt, audio: counts.audio })}</span>
+          <span className="dim" style={{ fontSize: 12, marginInlineEnd: 'auto' }}>{t('{both} paired · {prompt} prompt-only (gaps) · {audio} audio-only', { both: counts.both, prompt: counts.prompt, audio: counts.audio })}</span>
           <button className="primary" disabled={!!busy || !rows.length} onClick={() => onCreate({ ...album, rows })}>{busy || t.n('Create album ({n} track)', 'Create album ({n} tracks)', rows.length)}</button></>}>
       {step === 1 ? (
         <>

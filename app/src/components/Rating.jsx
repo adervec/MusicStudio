@@ -11,7 +11,7 @@ export function Stars({ value = 0, onChange, calc = null, n = 0, size = 14 }) {
         <button key={i} type="button" onMouseEnter={() => setHover(i)} onClick={() => onChange(value === i ? 0 : i)}
           style={{ fontSize: size, color: i <= v ? 'var(--gold, #f5c451)' : 'var(--line)' }}>★</button>
       ))}
-      {calc != null && <span className="dim" style={{ fontSize: 11, marginLeft: 4 }} title={t.n('Calculated from {n} rated part underneath', 'Calculated from {n} rated parts underneath', n)}>{value ? '· ' : ''}{t('{calc}★ from {n}', { calc: calc, n: n })}</span>}
+      {calc != null && <span className="dim" style={{ fontSize: 11, marginInlineStart: 4 }} title={t.n('Calculated from {n} rated part underneath', 'Calculated from {n} rated parts underneath', n)}>{value ? '· ' : ''}{t('{calc}★ from {n}', { calc: calc, n: n })}</span>}
     </span>
   );
 }

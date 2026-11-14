@@ -72,9 +72,9 @@ export default function Dashboard({ credits, onClose }) {
 
           <div className="section">{t('By model')}</div>
           <table>
-            <thead><tr><th>{t('Model')}</th><th>{t('Calls')}</th><th>{t('Amount')}</th><th style={{ textAlign: 'right' }}>{t('Est.')}</th></tr></thead>
+            <thead><tr><th>{t('Model')}</th><th>{t('Calls')}</th><th>{t('Amount')}</th><th style={{ textAlign: 'end' }}>{t('Est.')}</th></tr></thead>
             <tbody>{Object.entries(s.byModel).sort((a, b) => b[1].cost - a[1].cost).map(([model, m]) => (
-              <tr key={model}><td>{model}</td><td>{m.calls}</td><td>{m.kind === 'tts' ? `${fmtNum(m.chars, 0)} chars` : fmtDuration(m.ms)}</td><td style={{ textAlign: 'right' }}>{fmtUsd(m.cost)}</td></tr>
+              <tr key={model}><td>{model}</td><td>{m.calls}</td><td>{m.kind === 'tts' ? `${fmtNum(m.chars, 0)} chars` : fmtDuration(m.ms)}</td><td style={{ textAlign: 'end' }}>{fmtUsd(m.cost)}</td></tr>
             ))}</tbody>
           </table>
 
@@ -84,7 +84,7 @@ export default function Dashboard({ credits, onClose }) {
               <span className="dim">{fmtWhen(e.ts)}</span>
               <span>{e.kind === 'tts' ? t('🗣 Dialog') : t('🎵 Music')} · {e.model}</span>
               <span className="dim">{e.kind === 'tts' ? `${fmtNum(e.chars || 0, 0)} ch` : fmtDuration(e.ms)}</span>
-              <span style={{ textAlign: 'right' }}>{fmtUsd(e.costUsd || 0)}</span>
+              <span style={{ textAlign: 'end' }}>{fmtUsd(e.costUsd || 0)}</span>
             </div>
           ))}</div>
         </>

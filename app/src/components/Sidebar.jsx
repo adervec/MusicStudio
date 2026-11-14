@@ -43,7 +43,7 @@ export default function Sidebar({ groups, projects, playlists, activeId, activeG
     const dur = (a.tracks || []).reduce((s, tk) => s + (tk.clipId ? tk.durationMs || 0 : 0), 0);
     const g = albumGaps(a); const d = duplicateIds(a.tracks).size;
     return (
-      <div className={`proj ${activeId === a.id ? 'active' : ''}`} style={{ marginLeft: depth * 14 }} onClick={() => onOpen(a.id)}>
+      <div className={`proj ${activeId === a.id ? 'active' : ''}`} style={{ marginInlineStart: depth * 14 }} onClick={() => onOpen(a.id)}>
         <div className="row">
           <div className="grow" style={{ minWidth: 0 }}>
             <div className="t" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🎵 {a.title || t('Untitled')}</div>
@@ -65,7 +65,7 @@ export default function Sidebar({ groups, projects, playlists, activeId, activeG
     const albums = projects.filter((x) => x.parentId === g.id && albumMatches(x));
     return (
       <div>
-        <div className="grp-row" style={{ marginLeft: depth * 14 }}>
+        <div className="grp-row" style={{ marginInlineStart: depth * 14 }}>
           <span onClick={() => onToggle(g.id)} style={{ cursor: 'pointer' }} title={open ? t('Collapse') : t('Expand')}>{open ? '▾' : '▸'}</span>
           <span className="grow" onClick={() => onSelectGroup(g)} title={t('View group contents')} style={{ cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: activeGroupId === g.id ? 'var(--accent)' : undefined }}> 📁 {g.name}{groupGaps(g.id) > 0 && <span style={{ color: 'var(--warn)', fontWeight: 400 }}> · {groupGaps(g.id)}⚡</span>}</span>
           <button className="mini" title={t('New album in group')} onClick={() => onNewAlbum(g.id)}>＋♪</button>

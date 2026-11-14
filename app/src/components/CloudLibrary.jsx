@@ -83,7 +83,7 @@ export default function CloudLibrary({ catalog, requests, busy, onSave, onRefres
                   {!!Object.keys(a.meta || {}).length && (
                     <p className="note dim">{Object.entries(a.meta).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join(' · ')}</p>
                   )}
-                  <ol style={{ margin: '6px 0', paddingLeft: 22, fontSize: 13 }}>
+                  <ol style={{ margin: '6px 0', paddingInlineStart: 22, fontSize: 13 }}>
                     {a.tracks.map((tk, i) => (
                       <li key={i} style={{ marginBottom: 4, opacity: tk.ready ? 1 : 0.55 }}>
                         {tk.fav ? '★ ' : ''}{tk.title || <span className="dim">{t('untitled')}</span>}

@@ -109,7 +109,7 @@ export default function Settings({ finetunes = [], projects = [], onRefreshFinet
       <div className="section">{t('Google Drive (phone remote)')}</div>
       <div className="row">
         <div className="grow">{driveOn ? <>{/* the Google account picture shows whose Drive this is */}
-          {drivePicture ? <img src={drivePicture} alt="" referrerPolicy="no-referrer" style={{ width: 22, height: 22, borderRadius: '50%', verticalAlign: 'middle', marginRight: 6 }} /> : null}{t('Connected')}{driveEmail ? <>{' '}{t('as')}{' '}<b>{driveEmail}</b></> : ''}</> : <span className="dim">{t('Not connected.')}</span>}</div>
+          {drivePicture ? <img src={drivePicture} alt="" referrerPolicy="no-referrer" style={{ width: 22, height: 22, borderRadius: '50%', verticalAlign: 'middle', marginInlineEnd: 6 }} /> : null}{t('Connected')}{driveEmail ? <>{' '}{t('as')}{' '}<b>{driveEmail}</b></> : ''}</> : <span className="dim">{t('Not connected.')}</span>}</div>
         <button className="mini" onClick={driveOn ? onDisconnectDrive : onConnectDrive} disabled={!driveAvailable || !!cloudBusy}>{cloudBusy || (driveOn ? t('Disconnect') : t('Connect Google Drive'))}</button>
         {driveOn && publishName && <button className="mini" onClick={onPushCatalog} disabled={!!cloudBusy}>{t('☁ Push library')}</button>}
       </div>

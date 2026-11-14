@@ -55,7 +55,7 @@ export default function Reorganize({ groups, projects, busy, onApply, onClose })
   return (
     <Dialog title={t('🗂 Reorganize library')} onClose={onClose} width={760}
       footer={<><button onClick={onClose}>{t('Close')}</button>
-        <label className="row" style={{ margin: 0, marginRight: 'auto' }}><input type="checkbox" style={{ width: 'auto' }} checked={prune} onChange={(e) => setPrune(e.target.checked)} />{' '}{t('Remove groups this leaves empty')}</label>
+        <label className="row" style={{ margin: 0, marginInlineEnd: 'auto' }}><input type="checkbox" style={{ width: 'auto' }} checked={prune} onChange={(e) => setPrune(e.target.checked)} />{' '}{t('Remove groups this leaves empty')}</label>
         <button className="primary" disabled={!!busy || !plan.moves.length} onClick={() => onApply(plan, prune)}>{busy || t.n('Apply {n} move', 'Apply {n} moves', plan.moves.length)}</button></>}>
       <div className="row" style={{ marginBottom: 8 }}>
         <button className={mode === 'move' ? 'primary' : ''} onClick={() => setMode('move')}>{t('Move to a group')}</button>
@@ -83,7 +83,7 @@ export default function Reorganize({ groups, projects, busy, onApply, onClose })
       </div>
       <div className="wiz-list" style={{ maxHeight: 240 }}>
         {shown.map((r) => (
-          <label key={r.key} className="row" style={{ margin: 0, padding: '2px 0', paddingLeft: ql ? 0 : r.depth * 16 }}>
+          <label key={r.key} className="row" style={{ margin: 0, padding: '2px 0', paddingInlineStart: ql ? 0 : r.depth * 16 }}>
             <input type="checkbox" style={{ width: 'auto' }} checked={sel.has(r.key)} onChange={() => toggle(r.key)} />
             <span style={{ fontSize: 13, fontWeight: r.kind === 'group' ? 600 : 400 }}>{r.kind === 'group' ? '📁' : '🎵'} {r.label}</span>
           </label>
