@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { uid, listProjects, getProject, saveProject, deleteProject, listGroups, saveGroup, deleteGroup, listPlaylists, savePlaylist, deletePlaylist, putAttachment, getAttachment, deleteAttachment, getClip, putClip, deleteClip, getSetting, setSetting, getBackupDir, setBackupDir, clearBackupDir, getPublishDir, setPublishDir, clearPublishDir, exportAllData, importAllData } from './state/db.js';
 import { listVoices, listTtsModels, TTS_MODELS, newTrackModel, getSubscription, tts, musicModelFor } from './api/elevenlabs.js';
 import GenQueue from './components/GenQueue.jsx';
@@ -92,7 +92,9 @@ export default function App() {
   const [showCloud, setShowCloud] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
   const [wizBusy, setWizBusy] = useState('');
-  const [modal, setModal] = useState(null); // 'settings' | 'dashboard' | 'export' | 'metadata' | 'attachments' | 'cowork'
+  const [modal, setModal] = useState(null);
+  // the corner avatar (font.js <app-account>) opens Settings, where Drive sync lives
+  useEffect(() => { const open = () => setModal('settings'); document.addEventListener('app-account-click', open); return () => document.removeEventListener('app-account-click', open); }, []); // 'settings' | 'dashboard' | 'export' | 'metadata' | 'attachments' | 'cowork'
   const [sidebarW, setSidebarW] = useState(240);
   const [watch, setWatch] = useState(true);        // auto-reload album.json on external edits
   const [justSynced, setJustSynced] = useState(false);
@@ -1156,6 +1158,8 @@ export default function App() {
         <button onClick={() => setModal('dashboard')} className="spend-btn" title={poolTitle(credits)}>💲 Spend
           {credits?.limit > 0 && <span className="pool" style={{ '--pct': `${Math.min(100, (credits.used / credits.limit) * 100)}%`, '--c': poolColor(credits) }} />}
         </button>
+        {/* house standard: the signed-in Google picture, always visible; click opens Settings */}
+        {createElement('app-account')}
         <button onClick={() => setModal('settings')}>⚙ Settings</button>
       </div>
 

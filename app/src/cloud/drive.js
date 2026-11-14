@@ -52,7 +52,7 @@ export function driveConnected() { return tokenValid(); }
 async function fetchProfile(token) {
   try {
     const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: `Bearer ${token}` } });
-    if (r.ok) { const j = await r.json(); _profile = { name: j.name || j.email || 'Google account', email: j.email || '', picture: j.picture || '' }; }
+    if (r.ok) { const j = await r.json(); _profile = { name: j.name || j.email || 'Google account', email: j.email || '', picture: j.picture || '' }; window.appFont?.setAccount(_profile); } // house standard: picture in the top bar
   } catch { /* cosmetic only */ }
   return _profile;
 }
@@ -84,7 +84,7 @@ export async function driveConnect(cfg, { silent = false } = {}) {
   await fetchProfile(token);
   return token;
 }
-export function driveDisconnect() { _token = null; _profile = null; }
+export function driveDisconnect() { _token = null; _profile = null; window.appFont?.setAccount(null); }
 
 async function findFile(name) {
   const q = encodeURIComponent(`name='${name}' and trashed=false`);
