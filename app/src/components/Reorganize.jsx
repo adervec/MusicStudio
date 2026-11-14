@@ -3,6 +3,7 @@ import Dialog from './Dialog.jsx';
 import { uid } from '../state/db.js';
 import { groupFolderPath } from '../album/skeleton.js';
 import { planRearrange, descendantIds, ALBUM_FIELDS, albumField } from '../album/library.js';
+import { t } from '../i18n.js';
 
 // Bulk-rearrange the group tree (and the folders on disk): tick groups/albums, then either move them
 // all under one path, or sort the ticked albums into sub-groups by a field (genre, year, …).
@@ -52,33 +53,33 @@ export default function Reorganize({ groups, projects, busy, onApply, onClose })
   const labelOf = (id) => tree.find((r) => r.id === id)?.label || id;
 
   return (
-    <Dialog title="🗂 Reorganize library" onClose={onClose} width={760}
-      footer={<><button onClick={onClose}>Close</button>
-        <label className="row" style={{ margin: 0, marginRight: 'auto' }}><input type="checkbox" style={{ width: 'auto' }} checked={prune} onChange={(e) => setPrune(e.target.checked)} /> Remove groups this leaves empty</label>
-        <button className="primary" disabled={!!busy || !plan.moves.length} onClick={() => onApply(plan, prune)}>{busy || `Apply ${plan.moves.length} move${plan.moves.length === 1 ? '' : 's'}`}</button></>}>
+    <Dialog title={t('🗂 Reorganize library')} onClose={onClose} width={760}
+      footer={<><button onClick={onClose}>{t('Close')}</button>
+        <label className="row" style={{ margin: 0, marginRight: 'auto' }}><input type="checkbox" style={{ width: 'auto' }} checked={prune} onChange={(e) => setPrune(e.target.checked)} />{' '}{t('Remove groups this leaves empty')}</label>
+        <button className="primary" disabled={!!busy || !plan.moves.length} onClick={() => onApply(plan, prune)}>{busy || t.n('Apply {n} move', 'Apply {n} moves', plan.moves.length)}</button></>}>
       <div className="row" style={{ marginBottom: 8 }}>
-        <button className={mode === 'move' ? 'primary' : ''} onClick={() => setMode('move')}>Move to a group</button>
-        <button className={mode === 'groupby' ? 'primary' : ''} onClick={() => setMode('groupby')}>Sort into groups by field</button>
+        <button className={mode === 'move' ? 'primary' : ''} onClick={() => setMode('move')}>{t('Move to a group')}</button>
+        <button className={mode === 'groupby' ? 'primary' : ''} onClick={() => setMode('groupby')}>{t('Sort into groups by field')}</button>
       </div>
       <datalist id="group-paths">{paths.map((p) => <option key={p} value={p} />)}</datalist>
       {mode === 'move' ? (
         <>
-          <label>Destination group — pick one or type a new path (“Archive/2026” creates both); empty = top level</label>
-          <input list="group-paths" value={dest} onChange={(e) => setDest(e.target.value)} placeholder="e.g. Darksynth Albums/Cycle 5" />
+          <label>{t('Destination group — pick one or type a new path (“Archive/2026” creates both); empty = top level')}</label>
+          <input list="group-paths" value={dest} onChange={(e) => setDest(e.target.value)} placeholder={t('e.g. Darksynth Albums/Cycle 5')} />
         </>
       ) : (
         <div className="row">
-          <div className="grow"><label>Field</label>
+          <div className="grow"><label>{t('Field')}</label>
             <select value={field} onChange={(e) => setField(e.target.value)}>{ALBUM_FIELDS.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}</select></div>
-          <div style={{ flex: 2 }}><label>Under (optional) — e.g. “By genre”</label>
-            <input list="group-paths" value={base} onChange={(e) => setBase(e.target.value)} placeholder="top level" /></div>
+          <div style={{ flex: 2 }}><label>{t('Under (optional) — e.g. “By genre”')}</label>
+            <input list="group-paths" value={base} onChange={(e) => setBase(e.target.value)} placeholder={t('top level')} /></div>
         </div>
       )}
 
       <div className="row" style={{ marginTop: 10 }}>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter the tree…" className="grow" />
-        <button className="mini" onClick={() => setSel(new Set(shown.filter((r) => mode === 'move' || r.kind === 'album').map((r) => r.key)))}>All</button>
-        <button className="mini" onClick={() => setSel(new Set())}>None</button>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Filter the tree…')} className="grow" />
+        <button className="mini" onClick={() => setSel(new Set(shown.filter((r) => mode === 'move' || r.kind === 'album').map((r) => r.key)))}>{t('All')}</button>
+        <button className="mini" onClick={() => setSel(new Set())}>{t('None')}</button>
       </div>
       <div className="wiz-list" style={{ maxHeight: 240 }}>
         {shown.map((r) => (
@@ -89,9 +90,9 @@ export default function Reorganize({ groups, projects, busy, onApply, onClose })
         ))}
       </div>
 
-      <label>Preview — {plan.moves.length} folder move{plan.moves.length === 1 ? '' : 's'}{plan.created.length ? `, ${plan.created.length} new group${plan.created.length === 1 ? '' : 's'}` : ''}{plan.count > plan.moves.length + plan.blocked.length ? ` (${plan.count - plan.moves.length - plan.blocked.length} already in place)` : ''}</label>
+      <label>{t.n('Preview — {n} folder move', 'Preview — {n} folder moves', plan.moves.length)}{plan.created.length ? t.n(', {n} new group', ', {n} new groups', plan.created.length) : ''}{plan.count > plan.moves.length + plan.blocked.length ? t(' ({value} already in place)', { value: plan.count - plan.moves.length - plan.blocked.length }) : ''}</label>
       <div className="wiz-list" style={{ maxHeight: 180, fontSize: 12 }}>
-        {!plan.moves.length && !plan.blocked.length && <div className="dim">Tick something and choose where it goes.</div>}
+        {!plan.moves.length && !plan.blocked.length && <div className="dim">{t('Tick something and choose where it goes.')}</div>}
         {plan.moves.map((m) => <div key={m.id}>{m.kind === 'group' ? '📁' : '🎵'} <span className="dim">{m.from}</span> → <b>{m.to}</b></div>)}
         {plan.blocked.map((b) => <div key={b.id} style={{ color: 'var(--bad)' }}>✕ {labelOf(b.id)} — {b.why}</div>)}
       </div>

@@ -37,6 +37,7 @@ import DeviceSync from './components/DeviceSync.jsx';
 import CloudLibrary from './components/CloudLibrary.jsx';
 import { driveConnect, driveDisconnect, driveConnected, driveProfile, driveUploadJson, driveDownloadJson, driveStat, driveClientId, CATALOG_FILE, REQUEST_FILE } from './cloud/drive.js';
 import { buildCatalog, buildRequests, requestsPending } from './cloud/catalog.js';
+import { t } from './i18n.js';
 
 const DEFAULT_PREFS = { confirmSpend: true, takes: 1, phoneticNames: false, c2pa: false, folderHelper: false, musicModel: 'latest', ttsModel: 'eleven_multilingual_v2', defaultVoiceId: '', defaultLengthSec: 60, gapMs: 800, backupPath: '', deviceName: '', driveClientId: '' };
 const extOf = (mime, fileName) => (fileName?.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase()) || (mime === 'audio/wav' ? 'wav' : mime === 'audio/mpeg' ? 'mp3' : 'mp3');
@@ -65,11 +66,11 @@ export default function App() {
   }, [finetunes, loadFinetunes]);
   async function makeFinetune({ name, genre, source }) {
     const pool = projects.flatMap((p) => (p.tracks || []).filter((tk) => tk.clipId && (source === 'rated4' ? (tk.rating || 0) >= 4 : source === 'fav' ? tk.fav : p.id === source)));
-    if (!pool.length) return showToast('No songs with audio match that choice');
+    if (!pool.length) return showToast(t('No songs with audio match that choice'));
     const files = [];
     for (const tk of pool.slice(0, 50)) { const b = await getClip(tk.clipId); if (b) files.push({ blob: b, name: tk.backupFile || `${sanitizeFilename(tk.title || 'track')}.mp3` }); }
-    try { await createFinetune({ name: name.trim(), genre: genre.trim(), files, model: musicModelFor({}) }, apiKey); showToast(`🎓 Finetune “${name}” started with ${files.length} songs`); loadFinetunes(); }
-    catch (e) { showToast('Finetune failed: ' + (e.message || e)); }
+    try { await createFinetune({ name: name.trim(), genre: genre.trim(), files, model: musicModelFor({}) }, apiKey); showToast(t('🎓 Finetune “{name}” started with {count} songs', { name: name, count: files.length })); loadFinetunes(); }
+    catch (e) { showToast(t('Finetune failed: {error}', { error: e.message || e })); }
   }
   useEffect(() => {
     if (!apiKey) { setCredits(null); return; }
@@ -285,8 +286,8 @@ export default function App() {
       const final = { ...backfilled, tracks: [...linked, ...newTracks] };
       updateProject(() => final);
       writeSkeleton(final);
-      showToast(`🔎 Scan: ${recovered} recovered, ${matched.size} linked by title, ${newTracks.length} new file${newTracks.length === 1 ? '' : 's'}`);
-    } catch (e) { showToast('Scan failed: ' + (e.message || e)); }
+      showToast(t.n('🔎 Scan: {recovered} recovered, {size} linked by title, {n} new file', '🔎 Scan: {recovered} recovered, {size} linked by title, {n} new files', newTracks.length, { recovered: recovered, size: matched.size }));
+    } catch (e) { showToast(t('Scan failed: {error}', { error: e.message || e })); }
   }
 
   // Point a track at audio that already exists — a file in the album folder (used in place) or one
@@ -307,7 +308,7 @@ export default function App() {
       updateProject((pp) => ({ ...pp, tracks: pp.tracks.map((x) => (x.id === trackId ? { ...x, ...up } : x)) }));
       writeSkeleton();
       showToast(`📎 “${tk.title || 'Track'}” → ${inFolder ? src : src.name}`);
-    } catch (e) { showToast('Link failed: ' + (e.message || e)); }
+    } catch (e) { showToast(t('Link failed: {error}', { error: e.message || e })); }
   }
 
   const loadSkeleton = useCallback(async () => {
@@ -317,7 +318,7 @@ export default function App() {
       const merged = await backfillTracks(mergeSkeleton(p, JSON.parse(text)), dir);
       updateProject(() => merged);
       lastJsonRef.current = text;
-    } catch (e) { alert('Could not load album.json from the folder: ' + (e.message || e)); }
+    } catch (e) { alert(t('Could not load album.json from the folder: {error}', { error: e.message || e })); }
   }, [dir, updateProject, albumPath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Watch the active album's album.json and live-reload when an external editor (e.g. a Claude Code
@@ -355,7 +356,7 @@ export default function App() {
     if (!d) return { groups: 0, albums: 0 };
     let scan;
     try { if (!(await ensureWritable(d))) return { groups: 0, albums: 0 }; scan = await scanAlbums(d, ign); }
-    catch (e) { if (!silent) alert('Folder scan failed: ' + (e.message || e)); return { groups: 0, albums: 0 }; }
+    catch (e) { if (!silent) alert(t('Folder scan failed: {error}', { error: e.message || e })); return { groups: 0, albums: 0 }; }
     const curGroups = opts.groups || groups, curProjects = opts.projects || projects;
     const { newGroups, newProjects } = planImport(scan.albums, curGroups, curProjects, () => uid('g_'), () => uid('p_'));
     // Pick up in-place edits to albums the app already knows (any album, open or not).
@@ -453,7 +454,7 @@ export default function App() {
     writeSkeleton(p); // create the album's folder + album.json on disk immediately
   }
   async function newGroup(parentId = null) {
-    const name = prompt('Group name:', 'New group'); if (name == null) return;
+    const name = prompt(t('Group name:'), 'New group'); if (name == null) return;
     const g = { id: uid('g_'), name: name || 'Group', parentId: parentId || null };
     await saveGroup(g);
     if (parentId) setExpanded((s) => new Set(s).add(parentId));
@@ -461,7 +462,7 @@ export default function App() {
     fsOp((d) => ensureDir(d, groupFolderPath(g, [...groups, g]))); // create the group folder now
   }
   async function renameGroup(g) {
-    const name = prompt('Rename group:', g.name); if (name == null || name === g.name) return;
+    const name = prompt(t('Rename group:'), g.name); if (name == null || name === g.name) return;
     const oldPath = groupFolderPath(g, groups);
     const updated = { ...g, name: name || g.name };
     await saveGroup(updated); await refreshGroups();
@@ -469,7 +470,7 @@ export default function App() {
     fsOp((d) => moveDir(d, oldPath, newPath)); // rename the folder on disk
   }
   async function removeGroup(g) {
-    if (!confirm(`Delete group “${g.name}”? Its albums and sub-groups move up a level${g.attachments?.length ? `; its ${g.attachments.length} attachment(s) are deleted` : ''}.`)) return;
+    if (!confirm(t('Delete group “{name}”? Its albums and sub-groups move up a level{value}.', { name: g.name, value: g.attachments?.length ? t('; its {count} attachment(s) are deleted', { count: g.attachments.length }) : '' }))) return;
     const parent = g.parentId || null;
     const gPath = groupFolderPath(g, groups);
     const childGroups = groups.filter((x) => x.parentId === g.id);
@@ -514,17 +515,17 @@ export default function App() {
     const abs = prefs.backupPath ? `${prefs.backupPath.replace(/[\\/]+$/, '')}${back ? '\\' + back : ''}` : '';
     if (!abs) {
       setModal('settings');
-      return showToast('📂 Set the backup folder’s full path in Settings once — then 📂 opens Explorer');
+      return showToast(t('📂 Set the backup folder’s full path in Settings once — then 📂 opens Explorer'));
     }
     if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) {
       try {
         const r = await fetch('/__open-folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: abs }) });
-        if (r.ok) return showToast('📂 Opened in Explorer');
+        if (r.ok) return showToast(t('📂 Opened in Explorer'));
       } catch { /* not the dev server — try the helper */ }
     }
-    if (prefs.folderHelper) { location.href = 'musicstudio-open:' + encodeURIComponent(abs); return showToast('📂 Opening in Explorer…'); }
+    if (prefs.folderHelper) { location.href = 'musicstudio-open:' + encodeURIComponent(abs); return showToast(t('📂 Opening in Explorer…')); }
     try { await navigator.clipboard.writeText(abs); } catch { /* */ }
-    showToast('📋 Path copied — install the folder helper (Settings) so 📂 opens Explorer');
+    showToast(t('📋 Path copied — install the folder helper (Settings) so 📂 opens Explorer'));
   }
   // File pickers open in the folder of what's on screen: the attachments' owner, the open album, the
   // selected group — else the backup root.
@@ -543,17 +544,17 @@ export default function App() {
   function selectGroup(g) { setActive(null); setPlaylistId(null); setGroupViewId(g.id); }
   function selectPlaylist(pl) { setActive(null); setGroupViewId(null); setPlaylistId(pl.id); }
   async function newPlaylist() {
-    const name = prompt('Playlist name:', 'New playlist'); if (name == null) return;
+    const name = prompt(t('Playlist name:'), 'New playlist'); if (name == null) return;
     const pl = await savePlaylist({ id: uid('pl_'), name: name || 'Playlist', kind: 'static', items: [], rule: { field: 'all' }, createdAt: Date.now() });
     await refreshPlaylists(); selectPlaylist(pl);
   }
   async function changePlaylist(pl) { const rec = await savePlaylist(pl); setPlaylists((ls) => ls.map((x) => (x.id === rec.id ? rec : x))); }
-  async function renamePlaylist(pl) { const name = prompt('Rename playlist:', pl.name); if (name == null) return; await changePlaylist({ ...pl, name: name || pl.name }); }
-  async function removePlaylist(pl) { if (!confirm(`Delete playlist “${pl.name}”?`)) return; await deletePlaylist(pl.id); if (playlistId === pl.id) setPlaylistId(null); refreshPlaylists(); }
+  async function renamePlaylist(pl) { const name = prompt(t('Rename playlist:'), pl.name); if (name == null) return; await changePlaylist({ ...pl, name: name || pl.name }); }
+  async function removePlaylist(pl) { if (!confirm(t('Delete playlist “{name}”?', { name: pl.name }))) return; await deletePlaylist(pl.id); if (playlistId === pl.id) setPlaylistId(null); refreshPlaylists(); }
   async function addTracksToPlaylist(items, plId) {
     const pl = playlists.find((p) => p.id === plId); if (!pl) return;
     await changePlaylist({ ...pl, items: [...(pl.items || []), ...items] });
-    showToast(`＋ Added ${items.length} to “${pl.name}”`);
+    showToast(t('＋ Added {count} to “{name}”', { count: items.length, name: pl.name }));
   }
 
   // Album cover: store the image blob, mirror it to the folder as cover.<ext>, embed in exports.
@@ -603,7 +604,7 @@ export default function App() {
     window.addEventListener('mouseup', up);
   }
   async function removeAlbum(a) {
-    if (!confirm(`Delete “${a.title}” and its audio?`)) return;
+    if (!confirm(t('Delete “{title}” and its audio?', { title: a.title }))) return;
     const path = albumFolderPath(a, groups);
     await deleteProject(a.id);
     if (activeRef.current?.id === a.id) setActive(null);
@@ -614,7 +615,7 @@ export default function App() {
   async function pickBackup() {
     try {
       const h = await pickBackupDir();
-      if (await looksLikeAppFolder(h)) { alert('That folder is (or contains) the Music Studio app. Choose a folder OUTSIDE the app so generated audio and album skeletons never mix with the running code.'); return; }
+      if (await looksLikeAppFolder(h)) { alert(t('That folder is (or contains) the Music Studio app. Choose a folder OUTSIDE the app so generated audio and album skeletons never mix with the running code.')); return; }
       await ensureWritable(h); await setBackupDir(h); setDir(h);
       try { await writeToDir(h, 'AGENT.md', new Blob([rootAgentMarkdown()], { type: 'text/markdown' })); } catch { /* best-effort */ }
       if (activeRef.current) { writeSkeleton(activeRef.current, h); flushAttachments(activeRef.current.attachments, albumPath(activeRef.current), h); }
@@ -626,44 +627,44 @@ export default function App() {
 
   // ── Publish (device sync) — a second folder finished albums are written to as tagged tracks ──
   async function pickPublish() {
-    try { const h = await pickBackupDir(); await ensureWritable(h); await setPublishDir(h); setPubDir(h); showToast(`⇪ Publishing to ${h.name}`); }
+    try { const h = await pickBackupDir(); await ensureWritable(h); await setPublishDir(h); setPubDir(h); showToast(t('⇪ Publishing to {name}', { name: h.name })); }
     catch (e) { if (e?.name !== 'AbortError') alert(e.message); }
   }
   async function dropPublish() { await clearPublishDir(); setPubDir(null); }
   async function saveSyncMap(m) { setSyncMap(m); await setSetting('deviceSync', m); }
   async function publishOne(p) {
-    if (!pubDir) { showToast('Set a publish folder in Settings first'); setModal('settings'); return; }
+    if (!pubDir) { showToast(t('Set a publish folder in Settings first')); setModal('settings'); return; }
     try {
-      showToast(`⇪ Publishing “${p.title}”…`);
+      showToast(t('⇪ Publishing “{title}”…', { title: p.title }));
       const n = await publishAlbum(p, pubDir);
       if (n) { await saveSyncMap({ ...syncMap, [p.id]: { on: true, at: Date.now() } }); await notePublished([p]); } // published = synced
-      showToast(n ? `⇪ “${p.title}” → ${pubDir.name} (${n} track${n === 1 ? '' : 's'})` : 'No ready tracks to publish yet');
-    } catch (e) { showToast('Publish failed: ' + (e.message || e)); }
+      showToast(n ? t.n('⇪ “{title}” → {name} ({n} track)', '⇪ “{title}” → {name} ({n} tracks)', n, { title: p.title, name: pubDir.name }) : t('No ready tracks to publish yet'));
+    } catch (e) { showToast(t('Publish failed: {error}', { error: e.message || e })); }
   }
   // Reconcile the device folder with the chosen album set: publish missing/stale, remove deselected.
   // Returns the new sync map (or null on failure) so the Drive channel can publish the result.
   async function applySync(selIds, { quiet = false } = {}) {
     if (!pubDir) return null;
-    setSyncBusy('Scanning…');
+    setSyncBusy(t('Scanning…'));
     try {
-      if (!(await ensureWritable(pubDir))) throw new Error('Publish folder permission denied.');
+      if (!(await ensureWritable(pubDir))) throw new Error(t('Publish folder permission denied.'));
       const m = {};
       for (const p of projects) if (selIds.has(p.id)) m[p.id] = { on: true, at: syncMap[p.id]?.at || 0 };
       const dirs = await listAlbumDirs(pubDir);
       const plan = planSync(projects, m, dirs);
       let wrote = 0;
       for (const p of plan.toWrite) {
-        setSyncBusy(`Publishing ${++wrote}/${plan.toWrite.length}…`);
+        setSyncBusy(t('Publishing {value}/{count}…', { value: ++wrote, count: plan.toWrite.length }));
         if (await publishAlbum(p, pubDir)) m[p.id] = { on: true, at: Date.now() };
       }
-      for (const name of plan.toRemove) { setSyncBusy(`Removing ${name}…`); await removeDir(pubDir, name); }
+      for (const name of plan.toRemove) { setSyncBusy(t('Removing {name}…', { name: name })); await removeDir(pubDir, name); }
       await saveSyncMap(m);
       await notePublished(plan.toWrite, m);
       setSyncBusy('');
       if (!quiet) setModal(null);
-      showToast(`📱 Synced — ${plan.toWrite.length} published, ${plan.toRemove.length} removed, ${selIds.size} on device`);
+      showToast(t('📱 Synced — {count} published, {count2} removed, {size} on device', { count: plan.toWrite.length, count2: plan.toRemove.length, size: selIds.size }));
       return m;
-    } catch (e) { setSyncBusy(''); showToast('Sync failed: ' + (e.message || e)); return null; }
+    } catch (e) { setSyncBusy(''); showToast(t('Sync failed: {error}', { error: e.message || e })); return null; }
   }
 
   // ── File tags follow the app ──────────────────────────────────────────────────────────────
@@ -690,7 +691,7 @@ export default function App() {
       const canM = await canWriteQuietly(dir), canP = await canWriteQuietly(pubDir);
       if (!canM && !canP) return;
       const sigs = await getSetting('fileTagSigs', {});
-      const tick = () => { if (++n % 10 === 0) showToast(`🏷 Updating file tags… ${n}`); };
+      const tick = () => { if (++n % 10 === 0) showToast(t('🏷 Updating file tags… {n2}', { n2: n })); };
       for (const p of projects) {
         let pic; const picture = async () => (pic === undefined ? (pic = await coverPicture(p)) : pic);
         if (canM) for (const m of masterTargets(p)) {
@@ -723,7 +724,7 @@ export default function App() {
       }
       await setSetting('fileTagSigs', sigs);
       if (republished.length) { const at = Date.now(); await saveSyncMap({ ...syncMap, ...Object.fromEntries(republished.map((id) => [id, { on: true, at }])) }); }
-      if (n) showToast(`🏷 File tags up to date (${n} file${n === 1 ? '' : 's'} updated)`);
+      if (n) showToast(t.n('🏷 File tags up to date ({n} file updated)', '🏷 File tags up to date ({n} files updated)', n));
     } finally {
       run.busy = false;
       if (run.again) { run.again = false; tagSyncRef.current?.(); }
@@ -768,32 +769,32 @@ export default function App() {
     // Only overwrite what we show if we're NOT the master (the master's own state is fresher).
     if (cat && (!pubDir || !projects.length)) setCatalog(cat);
     else if (cat && !catalog) setCatalog(cat);
-    if (!silent && !cat) showToast('No library published to Drive yet');
+    if (!silent && !cat) showToast(t('No library published to Drive yet'));
     return { applied: false };
   }
   async function connectDrive({ silent = false } = {}) {
-    setCloudBusy('Connecting…');
+    setCloudBusy(t('Connecting…'));
     try {
       await driveConnect(prefs, { silent });
       setDrive(true);
       await pullCloud({ silent });
       if (pubDir && projects.length) await pushCatalog(); // we're the master — publish the library
       setCloudBusy('');
-      if (!silent) showToast(`☁ Drive connected${driveProfile()?.email ? ` — ${driveProfile().email}` : ''}`);
-    } catch (e) { setCloudBusy(''); if (!silent) showToast('Drive: ' + (e.message || e)); }
+      if (!silent) showToast(t('☁ Drive connected{value}', { value: driveProfile()?.email ? ` — ${driveProfile().email}` : '' }));
+    } catch (e) { setCloudBusy(''); if (!silent) showToast(t('Drive: {error}', { error: e.message || e })); }
   }
   function disconnectDrive() { driveDisconnect(); setDrive(false); setCatalog(null); setRequests(null); }
   // Phone side: publish the full desired album set; the desktop applies it when it next runs.
   async function saveCloudRequest(wantIds) {
-    setCloudBusy('Saving…');
+    setCloudBusy(t('Saving…'));
     try {
       const req = buildRequests(wantIds, { from: prefs.deviceName || 'Phone' });
       await driveUploadJson(REQUEST_FILE, req);
       setRequests(req);
       setCloudBusy('');
-      if (pubDir) { await pullCloud({ silent: true }); showToast('☁ Request saved and applied'); }
-      else showToast('☁ Saved — your desktop will sync these next time it runs');
-    } catch (e) { setCloudBusy(''); showToast('Save failed: ' + (e.message || e)); }
+      if (pubDir) { await pullCloud({ silent: true }); showToast(t('☁ Request saved and applied')); }
+      else showToast(t('☁ Saved — your desktop will sync these next time it runs'));
+    } catch (e) { setCloudBusy(''); showToast(t('Save failed: {error}', { error: e.message || e })); }
   }
 
   // Reorganize wizard: create the new groups, then apply each move in order — every from/to path
@@ -806,7 +807,7 @@ export default function App() {
       for (const g of plan.created) { await saveGroup(g); await fsOp((d) => ensureDir(d, groupFolderPath(g, gs))); }
       let i = 0;
       for (const m of plan.moves) {
-        setWizBusy(`Moving ${++i}/${plan.moves.length}…`);
+        setWizBusy(t('Moving {value}/{count}…', { value: ++i, count: plan.moves.length }));
         if (m.kind === 'group') {
           const g = gs.find((x) => x.id === m.id); if (!g) continue;
           const from = groupFolderPath(g, gs); const next = { ...g, parentId: m.parentId };
@@ -834,9 +835,9 @@ export default function App() {
         }
       }
       groupsRef.current = gs;
-      showToast(`🗂 ${plan.moves.length} moved${plan.created.length ? `, ${plan.created.length} group(s) created` : ''}${pruned ? `, ${pruned} empty removed` : ''}`);
+      showToast(t('🗂 {count} moved{value}{value2}', { count: plan.moves.length, value: plan.created.length ? t(', {count} group(s) created', { count: plan.created.length }) : '', value2: pruned ? t(', {pruned} empty removed', { pruned: pruned }) : '' }));
       setModal(null);
-    } catch (e) { showToast('Reorganize failed: ' + (e.message || e)); }
+    } catch (e) { showToast(t('Reorganize failed: {error}', { error: e.message || e })); }
     setWizBusy(''); await ensureGrouped(); await refreshGroups(); await refreshProjects();
     const a = activeRef.current && (await getProject(activeRef.current.id)); // may have landed in "Ungrouped"
     if (a) { groupsRef.current = await listGroups(); activeRef.current = a; setActive(a); }
@@ -846,7 +847,7 @@ export default function App() {
   // as the track's clip and written to the album folder, so it's ready (no spend); prompt-only rows
   // are gaps to generate; audio-only rows are uploads.
   async function buildAlbum({ title, group, description, rows }) {
-    setWizBusy('Creating…');
+    setWizBusy(t('Creating…'));
     try {
       const { parentId, created } = ensureGroupPath(group, groups, () => uid('g_'));
       for (const g of created) await saveGroup(g);
@@ -857,7 +858,7 @@ export default function App() {
       const keep = rows.filter((x) => x.file || x.prompt.trim());
       const tracks = [];
       for (const [i, r] of keep.entries()) {
-        setWizBusy(`Adding ${i + 1}/${keep.length}…`);
+        setWizBusy(t('Adding {value}/{count}…', { value: i + 1, count: keep.length }));
         const tk = { id: uid('t_'), type: r.prompt.trim() ? 'music' : 'upload', title: r.title.trim() || `Track ${i + 1}`, prompt: r.prompt.trim(), sourceUrl: r.url || '', lengthMs: (prefs.defaultLengthSec || 60) * 1000, ...newTrackModel(prefs), instrumental: false, status: 'idle', gain: 1 };
         if (r.file) {
           const clipId = uid('clip_'); await putClip(clipId, r.file);
@@ -877,8 +878,8 @@ export default function App() {
       setShowLibrary(false); setGroupViewId(null); setPlaylistId(null);
       lastJsonRef.current = null; setActive(p); writeSkeleton(p);
       setModal(null);
-      showToast(`🧩 “${p.title}” — ${tracks.filter((tk) => tk.clipId).length} with audio, ${tracks.filter((tk) => !tk.clipId).length} to generate`);
-    } catch (e) { showToast('Build failed: ' + (e.message || e)); }
+      showToast(t('🧩 “{title}” — {count} with audio, {count2} to generate', { title: p.title, count: tracks.filter((tk) => tk.clipId).length, count2: tracks.filter((tk) => !tk.clipId).length }));
+    } catch (e) { showToast(t('Build failed: {error}', { error: e.message || e })); }
     setWizBusy('');
   }
 
@@ -935,8 +936,8 @@ export default function App() {
     for (const b of batches) { const ids = new Set(b.trackIds); await updateProjectById(b.projectId, (p) => ({ ...p, tracks: (p.tracks || []).map((tk) => (ids.has(tk.id) ? { ...tk, rating } : tk)) })); }
   }
   async function enqueue(projectId, trackIds, opts = {}) {
-    if (!apiKey) { showToast('Set your ElevenLabs API key in Settings first'); setModal('settings'); return; }
-    if (!dir || !(await ensureWritable(dir))) { showToast('Connect the backup folder (outside the app) before generating'); setModal('settings'); return; }
+    if (!apiKey) { showToast(t('Set your ElevenLabs API key in Settings first')); setModal('settings'); return; }
+    if (!dir || !(await ensureWritable(dir))) { showToast(t('Connect the backup folder (outside the app) before generating')); setModal('settings'); return; }
     const p = await freshProject(projectId); if (!p) return;
     if (prefs.confirmSpend !== false && !opts.confirmed) return enqueueBatches([{ projectId, trackIds }], opts);
     const busy = new Set(jobsRef.current.filter((j) => (j.state === 'queued' || j.state === 'running') && (j.kind || '') === (opts.kind || '')).map((j) => j.trackId));
@@ -964,8 +965,8 @@ export default function App() {
         const tk = p?.tracks?.find((x) => x.id === job.trackId);
         if (!tk) { setJob(job.id, { state: 'error', error: 'track or album was deleted', at: Date.now() }); fail++; continue; }
         try {
-          if (!(await canWriteQuietly(dir))) throw new Error('Backup folder is locked — click the folder chip to unlock, then retry.');
-          const folder = async () => { const now = await freshProject(p.id); if (!now) throw new Error('album was deleted'); return albumFolderPath(now, groupsRef.current); };
+          if (!(await canWriteQuietly(dir))) throw new Error(t('Backup folder is locked — click the folder chip to unlock, then retry.'));
+          const folder = async () => { const now = await freshProject(p.id); if (!now) throw new Error(t('album was deleted')); return albumFolderPath(now, groupsRef.current); };
           const save = async (title, clipId, blob, ext = extOf(blob.type, tk.fileName)) => { const name = `${sanitizeFilename(title || 'Track')}_${clipId.slice(-5)}.${ext}`; await writeToDir(dir, `${await folder()}/${name}`, blob); return name; };
           const portal = () => { try { const key = 'portal-activity', a = JSON.parse(localStorage.getItem(key) || '[]'); a.push([Math.round(Date.now() / 1000), 'MusicStudio', 'compose', 1]); localStorage.setItem(key, JSON.stringify(a.slice(-2000))); } catch { /* quota */ } };
           let twin = null;
@@ -974,7 +975,7 @@ export default function App() {
           const adopt = (take) => updateProjectById(p.id, (pp) => ({ ...pp, tracks: (pp.tracks || []).map((x) => (x.id !== tk.id ? x : { ...x, ...takeToRep(take), status: 'ready', error: '', takes: [...(x.takes || []), ...(x.clipId ? [repAsTake(x)] : [])] })) }));
           if (job.kind === 'stems') {
             setJob(job.id, { note: 'separating stems…' });
-            const src = await getClip(tk.clipId); if (!src) throw new Error('audio not found');
+            const src = await getClip(tk.clipId); if (!src) throw new Error(t('audio not found'));
             const files = await separateStems(src, job.variation || 'six_stems_v1', apiKey, tk.backupFile || 'song.mp3');
             const sub = `stems/${sanitizeFilename(tk.title || 'Track')}_${(tk.clipId || '').slice(-5)}`;
             const stems = [];
@@ -1050,7 +1051,7 @@ export default function App() {
     } finally {
       runningRef.current = false;
       if (ok + fail > 1) {
-        showToast(`✦ Generation queue done — ${ok} ready${fail ? `, ${fail} failed` : ''}`);
+        showToast(t('✦ Generation queue done — {ok} ready{value}', { ok: ok, value: fail ? t(', {fail} failed', { fail: fail }) : '' }));
         try { if (typeof Notification !== 'undefined' && Notification.permission === 'granted') new Notification('Music Studio', { body: `Generation queue done — ${ok} ready${fail ? `, ${fail} failed` : ''}` }); } catch { /* */ }
       }
     }
@@ -1063,7 +1064,7 @@ export default function App() {
       if (dir && k.backupFile) for (const f of [k.backupFile, k.backupFile.replace(/\.[^.]+$/, '.lrc')]) await fsOp((d) => removeFromDir(d, `${albumPath(activeRef.current)}/${f}`));
     }
     await patchTrack(activeRef.current.id, tk.id, { takes: (tk.takes || []).filter((k) => !ids.includes(k.id)) });
-    showToast(`🗑 ${kill.length} take${kill.length === 1 ? '' : 's'} deleted`);
+    showToast(t.n('🗑 {n} take deleted', '🗑 {n} takes deleted', kill.length));
   }
   // Redo one section: keep the song outside the range (ElevenLabs reuses the stored audio) and
   // regenerate only the middle. Needs the song stored at ElevenLabs — older audio is uploaded first.
@@ -1072,19 +1073,19 @@ export default function App() {
     try {
       let songId = tk.songId;
       if (!songId) {
-        showToast('⇪ Uploading the current audio to ElevenLabs…');
-        const blob = await getClip(tk.clipId); if (!blob) throw new Error('audio not found');
+        showToast(t('⇪ Uploading the current audio to ElevenLabs…'));
+        const blob = await getClip(tk.clipId); if (!blob) throw new Error(t('audio not found'));
         songId = (await uploadSong(blob, { withTimestamps: false, name: tk.backupFile || 'song.mp3' }, apiKey)).songId;
         await patchTrack(projectId, tk.id, { songId });
       }
       const plan = inpaintPlan(songId, tk.durationMs, from * 1000, to * 1000, { text: text || '', positive_styles: String(styles || '').split(',').map((x) => x.trim()).filter(Boolean), negative_styles: [], context_adherence: 'high' });
       enqueue(projectId, [tk.id], { plan });
-    } catch (e) { showToast('Redo failed: ' + (e.message || e)); }
+    } catch (e) { showToast(t('Redo failed: {error}', { error: e.message || e })); }
   }
   // 🎧 New tracks from an existing song's reverse-engineered plan (see FromSong).
   async function createFromSong(o) {
     const projectId = activeRef.current?.id; if (!projectId) return;
-    setWizBusy('Adding…');
+    setWizBusy(t('Adding…'));
     try {
       const base = o.analysis.plan || { chunks: [] };
       const srcMs = await clipDurationMs(o.file);
@@ -1094,19 +1095,19 @@ export default function App() {
       const add = [];
       if (o.recreate) add.push(mk(`${name} (recreated)`, base));
       for (let k = 1; k <= (o.siblings || 0); k++) {
-        setWizBusy(`Planning sibling ${k}/${o.siblings}…`);
+        setWizBusy(t('Planning sibling {k}/{siblings}…', { k: k, siblings: o.siblings }));
         const prompt = `A new original song in the same style, instrumentation, tempo, structure and mood as the source plan, with a different melody${o.lyrics ? ' and new lyrics on a related theme' : ''}. ${o.direction || ''} Variation ${k} of ${o.siblings}: make it distinct from the others.`;
         let plan = base;
-        try { plan = (await draftPlan({ prompt, lengthMs: planMs(base) || null, model: musicModelFor({}), source: { chunks: base.chunks.filter((c) => !c.song_id) } }, apiKey)) || base; } catch (e) { showToast('Sibling plan failed, using the source plan: ' + (e.message || e)); }
+        try { plan = (await draftPlan({ prompt, lengthMs: planMs(base) || null, model: musicModelFor({}), source: { chunks: base.chunks.filter((c) => !c.song_id) } }, apiKey)) || base; } catch (e) { showToast(t('Sibling plan failed, using the source plan: {error}', { error: e.message || e })); }
         add.push({ ...mk(`${name} — sibling ${k}`, plan), lyrics: '' });
       }
       await updateProjectById(projectId, (pp) => ({ ...pp, tracks: [...(pp.tracks || []), ...add] }));
       if (o.addOriginal) { await uploadTracks(projectId, [o.file]); }
       const saved = await freshProject(projectId); if (saved) writeSkeleton(saved);
       setModal(null);
-      showToast(`🎧 Added ${add.length + (o.addOriginal ? 1 : 0)} track(s) from “${name}”`);
+      showToast(t('🎧 Added {value} track(s) from “{name}”', { value: add.length + (o.addOriginal ? 1 : 0), name: name }));
       if (o.generate && add.length) enqueue(projectId, add.map((tk) => tk.id));
-    } catch (e) { showToast('From song failed: ' + (e.message || e)); }
+    } catch (e) { showToast(t('From song failed: {error}', { error: e.message || e })); }
     setWizBusy('');
   }
   // 🎬 A music track scored from video clips (videos live only in the queue job).
@@ -1120,14 +1121,14 @@ export default function App() {
   const activeJobs = jobs.filter((j) => j.state === 'queued' || j.state === 'running');
 
   async function exportData() {
-    try { const bundle = await exportAllData(); download(new Blob([JSON.stringify(bundle)], { type: 'application/json' }), `musicstudio-backup-${new Date().toISOString().slice(0, 10)}.json`); showToast('💾 Backup downloaded'); }
-    catch (e) { showToast('Backup failed: ' + (e.message || e)); }
+    try { const bundle = await exportAllData(); download(new Blob([JSON.stringify(bundle)], { type: 'application/json' }), `musicstudio-backup-${new Date().toISOString().slice(0, 10)}.json`); showToast(t('💾 Backup downloaded')); }
+    catch (e) { showToast(t('Backup failed: {error}', { error: e.message || e })); }
   }
   async function importData() {
     const [f] = await pickFile('application/json,.json'); if (!f) return;
-    if (!confirm('Restore REPLACES current albums, groups, playlists, attachments and settings. Audio recovers from your backup folder (🔎 Scan folder). Continue?')) return;
+    if (!confirm(t('Restore REPLACES current albums, groups, playlists, attachments and settings. Audio recovers from your backup folder (🔎 Scan folder). Continue?'))) return;
     try { await importAllData(JSON.parse(await f.text())); location.reload(); }
-    catch (e) { alert('Restore failed: ' + (e.message || e)); }
+    catch (e) { alert(t('Restore failed: {error}', { error: e.message || e })); }
   }
 
   const trackInfo = useMemo(() => { const m = new Map(); for (const p of projects) for (const tk of p.tracks || []) m.set(tk.id, { title: tk.title, album: p.title || 'Album', albumId: p.id }); return m; }, [projects]);
@@ -1137,30 +1138,29 @@ export default function App() {
   return (
     <>
       <div className="topbar">
-        <h1><span className="logo">◈</span> Music Studio</h1>
-        <span className="dim" style={{ fontSize: 12 }}>ElevenLabs album builder</span>
+        <h1><span className="logo">◈</span>{' '}{t('Music Studio')}</h1>
+        <span className="dim" style={{ fontSize: 12 }}>{t('ElevenLabs album builder')}</span>
         <div className="spacer" />
         {toast && <span style={{ fontSize: 12, color: 'var(--good)' }}>{toast}</span>}
-        {justSynced && <span style={{ fontSize: 12, color: 'var(--good)' }}>↻ Synced from folder</span>}
-        {!apiKey && <span className="dim" style={{ fontSize: 12 }}>⚠ No API key</span>}
+        {justSynced && <span style={{ fontSize: 12, color: 'var(--good)' }}>{t('↻ Synced from folder')}</span>}
+        {!apiKey && <span className="dim" style={{ fontSize: 12 }}>{t('⚠ No API key')}</span>}
         {dir
-          ? <button className="folder-chip" onClick={() => setModal('settings')} title="Connected backup folder — click to change">📁 {dir.name}</button>
-          : <button className="folder-chip warn" onClick={() => setModal('settings')} title="No backup folder — click to connect">⚠ Connect folder</button>}
-        <button onClick={() => { setShowLibrary((v) => !v); setShowCloud(false); }} className={showLibrary ? 'primary' : ''} title="Every song in one searchable, sortable table, with library stats">📊 Library</button>
-        <button onClick={() => setModal('build')} title="Build an album from pasted prompts, prompt files and/or audio files — paired up by title">🧩 Build album</button>
-        <button onClick={() => setModal('reorg')} title="Move many groups/albums at once, or sort albums into groups by genre/year/artist">🗂 Reorganize</button>
-        <button onClick={() => setModal('import')} disabled={!dir} title="Scan the folder for groups/albums created on disk (e.g. by a Claude Code session)">⟳ Import</button>
-        <button onClick={() => setWatch((w) => !w)} disabled={!dir} title="Auto-reload album.json when an external editor (e.g. a Claude Code session) changes it">{watch ? '👁 Watching' : '👁 Watch off'}</button>
-        <button onClick={() => setModal('cowork')} title="Hand your albums and prompts to an AI agent through a folder, and read its notes back">🤝 Cowork</button>
-        <button onClick={() => { setShowCloud((v) => !v); setShowLibrary(false); if (!drive) connectDrive(); }} className={showCloud ? 'primary' : ''} title="Browse the desktop library published to Google Drive and choose what syncs to your phone">☁ Cloud{requests && pubDir && requestsPending(requests, 0) ? ' •' : ''}</button>
-        <button onClick={() => setModal('sync')} disabled={!pubDir} title={pubDir ? `Choose which albums are synced to ${pubDir.name} (your device folder)` : 'Set a publish folder in Settings first'}>📱 Sync</button>
-        {jobs.length > 0 && <button onClick={() => setModal('queue')} className={activeJobs.length ? 'primary' : ''} title="Generation queue — runs in the background while you browse">{activeJobs.length ? `✦ Generating ${jobs.filter((j) => j.state !== 'queued' && j.state !== 'running' && j.state !== 'cancelled').length + 1}/${jobs.filter((j) => j.state !== 'cancelled').length}` : '✦ Queue'}</button>}
-        <button onClick={() => setModal('dashboard')} className="spend-btn" title={poolTitle(credits)}>💲 Spend
-          {credits?.limit > 0 && <span className="pool" style={{ '--pct': `${Math.min(100, (credits.used / credits.limit) * 100)}%`, '--c': poolColor(credits) }} />}
+          ? <button className="folder-chip" onClick={() => setModal('settings')} title={t('Connected backup folder — click to change')}>📁 {dir.name}</button>
+          : <button className="folder-chip warn" onClick={() => setModal('settings')} title={t('No backup folder — click to connect')}>{t('⚠ Connect folder')}</button>}
+        <button onClick={() => { setShowLibrary((v) => !v); setShowCloud(false); }} className={showLibrary ? 'primary' : ''} title={t('Every song in one searchable, sortable table, with library stats')}>{t('📊 Library')}</button>
+        <button onClick={() => setModal('build')} title={t('Build an album from pasted prompts, prompt files and/or audio files — paired up by title')}>{t('🧩 Build album')}</button>
+        <button onClick={() => setModal('reorg')} title={t('Move many groups/albums at once, or sort albums into groups by genre/year/artist')}>{t('🗂 Reorganize')}</button>
+        <button onClick={() => setModal('import')} disabled={!dir} title={t('Scan the folder for groups/albums created on disk (e.g. by a Claude Code session)')}>{t('⟳ Import')}</button>
+        <button onClick={() => setWatch((w) => !w)} disabled={!dir} title={t('Auto-reload album.json when an external editor (e.g. a Claude Code session) changes it')}>{watch ? t('👁 Watching') : t('👁 Watch off')}</button>
+        <button onClick={() => setModal('cowork')} title={t('Hand your albums and prompts to an AI agent through a folder, and read its notes back')}>{t('🤝 Cowork')}</button>
+        <button onClick={() => { setShowCloud((v) => !v); setShowLibrary(false); if (!drive) connectDrive(); }} className={showCloud ? 'primary' : ''} title={t('Browse the desktop library published to Google Drive and choose what syncs to your phone')}>{t('☁ Cloud')}{requests && pubDir && requestsPending(requests, 0) ? ' •' : ''}</button>
+        <button onClick={() => setModal('sync')} disabled={!pubDir} title={pubDir ? t('Choose which albums are synced to {name} (your device folder)', { name: pubDir.name }) : t('Set a publish folder in Settings first')}>{t('📱 Sync')}</button>
+        {jobs.length > 0 && <button onClick={() => setModal('queue')} className={activeJobs.length ? 'primary' : ''} title={t('Generation queue — runs in the background while you browse')}>{activeJobs.length ? t('✦ Generating {value}/{count}', { value: jobs.filter((j) => j.state !== 'queued' && j.state !== 'running' && j.state !== 'cancelled').length + 1, count: jobs.filter((j) => j.state !== 'cancelled').length }) : t('✦ Queue')}</button>}
+        <button onClick={() => setModal('dashboard')} className="spend-btn" title={poolTitle(credits)}>{t('💲 Spend')}{credits?.limit > 0 && <span className="pool" style={{ '--pct': `${Math.min(100, (credits.used / credits.limit) * 100)}%`, '--c': poolColor(credits) }} />}
         </button>
         {/* house standard: the signed-in Google picture, always visible; click opens Settings */}
         {createElement('app-account')}
-        <button onClick={() => setModal('settings')}>⚙ Settings</button>
+        <button onClick={() => setModal('settings')}>{t('⚙ Settings')}</button>
       </div>
 
       <div className={`app${showCloud || showLibrary ? ' solo' : ''}`} style={{ gridTemplateColumns: `${sidebarW}px 6px 1fr` }}>
@@ -1172,7 +1172,7 @@ export default function App() {
             onCopyAlbumPath={copyAlbumPath} onCopyGroupPath={copyGroupPath} />
         </div>
 
-        <div className="divider" onMouseDown={startResize} title="Drag to resize" />
+        <div className="divider" onMouseDown={startResize} title={t('Drag to resize')} />
 
         <div className="main">
           {showCloud
@@ -1191,7 +1191,7 @@ export default function App() {
                 onSetCover={setCover} onClearCover={clearCover} onDuplicateAlbum={() => duplicateAlbum(active)} onCopyPath={() => copyAlbumPath(active)}
                 onExport={() => setModal('export')} onMetadata={() => setModal('metadata')} onAttachments={() => { setAttGroupId(null); setModal('attachments'); }} onLoadSkeleton={loadSkeleton} onScanFolder={scanAlbumFolder} onListAlbumAudio={listAlbumAudio} onLinkFile={linkTrackFile} onGenerate={(ids) => enqueue(active.id, ids)} onUpload={(files) => uploadTracks(active.id, files)} onDeleteTakes={deleteTakes} onInpaint={inpaintTrack} finetunes={finetunes} onFromSong={() => setModal('fromSong')} onFromVideo={() => setModal('fromVideo')} onStems={(tk, variation) => enqueue(active.id, [tk.id], { kind: 'stems', variation })} queued={activeJobs.filter((j) => j.projectId === active.id).length}
                 playlists={playlists} onAddToPlaylist={addTracksToPlaylist} onPublish={() => publishOne(active)} publishName={pubDir?.name} />
-            : <div className="empty" style={{ marginTop: 40 }}>Select an album on the left, or create one.<br />{!apiKey && 'Add your ElevenLabs API key in Settings, and '}set a backup folder (outside the app) before generating.</div>}
+            : <div className="empty" style={{ marginTop: 40 }}>{t('Select an album on the left, or create one.')}<br />{apiKey ? t('Set a backup folder (outside the app) before generating.') : t('Add your ElevenLabs API key in Settings, and set a backup folder (outside the app) before generating.')}</div>}
         </div>
       </div>
 
@@ -1203,7 +1203,7 @@ export default function App() {
           driveOn={drive} driveEmail={driveProfile()?.email} drivePicture={driveProfile()?.picture} driveAvailable={!!driveClientId(prefs)} cloudBusy={cloudBusy}
           onConnectDrive={async () => { await setSetting('driveOn', true); connectDrive(); }}
           onDisconnectDrive={async () => { await setSetting('driveOn', false); disconnectDrive(); }}
-          onPushCatalog={async () => { setCloudBusy('Pushing…'); try { const c = await pushCatalog(); showToast(`☁ Published ${c.albums.length} albums to Drive`); } catch (e) { showToast('Push failed: ' + (e.message || e)); } setCloudBusy(''); }} />
+          onPushCatalog={async () => { setCloudBusy(t('Pushing…')); try { const c = await pushCatalog(); showToast(t('☁ Published {count} albums to Drive', { count: c.albums.length })); } catch (e) { showToast(t('Push failed: {error}', { error: e.message || e })); } setCloudBusy(''); }} />
       )}
       <PlayerBar info={(id) => trackInfo.get(id)} onOpenAlbum={(id) => { setShowLibrary(false); setShowCloud(false); open(id); }} />
       {spendAsk && <ConfirmSpend ask={spendAsk} onCancel={() => setSpendAsk(null)}
@@ -1218,11 +1218,11 @@ export default function App() {
       {modal === 'sync' && pubDir && <DeviceSync projects={projects} groups={groups} syncMap={syncMap} deviceName={pubDir.name} busy={syncBusy} onApply={applySync} onClose={() => setModal(null)} />}
       {modal === 'export' && active && <Export project={active} backupDir={dir} backupName={dir?.name} albumDir={albumPath(active)} gapMs={prefs.gapMs} onClose={() => setModal(null)} />}
       {modal === 'metadata' && active && <Metadata project={active} onChange={updateProject} onClose={() => { setModal(null); writeSkeleton(); }} />}
-      {modal === 'attachments' && (attGroupId ? groups.some((g) => g.id === attGroupId) : active) && <Attachments project={attGroupId ? groups.find((g) => g.id === attGroupId) : active} title={attGroupId ? `Group attachments — ${groups.find((g) => g.id === attGroupId)?.name}` : 'Album attachments'} where={attGroupId ? 'group' : 'album'} onAddNote={addNote} onAddFiles={addFiles} onDelete={removeAttachment} onDownload={downloadAttachment} onClose={() => setModal(null)} />}
+      {modal === 'attachments' && (attGroupId ? groups.some((g) => g.id === attGroupId) : active) && <Attachments project={attGroupId ? groups.find((g) => g.id === attGroupId) : active} title={attGroupId ? t('Group attachments — {name}', { name: groups.find((g) => g.id === attGroupId)?.name }) : t('Album attachments')} where={attGroupId ? 'group' : 'album'} onAddNote={addNote} onAddFiles={addFiles} onDelete={removeAttachment} onDownload={downloadAttachment} onClose={() => setModal(null)} />}
       {modal === 'import' && dir && (
         <Import ignored={ignored} onClose={() => setModal(null)}
           onScan={() => scanAlbums(dir, [])}
-          onApply={async (ignoreArr) => { setIgnored(ignoreArr); await setSetting('ignoredFolders', ignoreArr); const r = await importFromFolder(false, { ignored: ignoreArr }); alert(`Imported ${r.groups} group(s) and ${r.albums} album(s); updated ${r.refreshed || 0} album(s) edited on disk.`); }} />
+          onApply={async (ignoreArr) => { setIgnored(ignoreArr); await setSetting('ignoredFolders', ignoreArr); const r = await importFromFolder(false, { ignored: ignoreArr }); alert(t('Imported {groups} group(s) and {albums} album(s); updated {value} album(s) edited on disk.', { groups: r.groups, albums: r.albums, value: r.refreshed || 0 })); }} />
       )}
     </>
   );

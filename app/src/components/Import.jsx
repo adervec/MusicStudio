@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import Dialog from './Dialog.jsx';
+import { t } from '../i18n.js';
 
 // Scan the backup folder for groups/albums created on disk (e.g. by a separate Claude Code session)
 // and import them. Root-level folders that aren't albums (e.g. Inputs, Music) can be toggled to be
@@ -19,15 +20,15 @@ export default function Import({ onScan, ignored, onApply, onClose }) {
   async function apply() { setBusy(true); await onApply([...ign]); setBusy(false); onClose(); }
 
   return (
-    <Dialog title="Import from folder" onClose={onClose} width={560}
-      footer={<><button onClick={onClose}>Cancel</button><button className="primary" onClick={apply} disabled={!scan || busy}>{busy ? 'Importing…' : `Import (${importable.length})`}</button></>}>
-      <p className="note">Groups and albums found in the backup folder are synced into the app. An album is any folder containing an <code>album.json</code>; its parent folders become groups. Tick a root folder to <b>ignore</b> it (e.g. folders that aren't albums).</p>
-      {err && <p className="note" style={{ color: 'var(--bad)' }}>Scan failed: {err}</p>}
-      {!scan && !err && <p className="note">Scanning…</p>}
+    <Dialog title={t('Import from folder')} onClose={onClose} width={560}
+      footer={<><button onClick={onClose}>{t('Cancel')}</button><button className="primary" onClick={apply} disabled={!scan || busy}>{busy ? t('Importing…') : t('Import ({count})', { count: importable.length })}</button></>}>
+      <p className="note">{t('Groups and albums found in the backup folder are synced into the app. An album is any folder containing an')}{' '}<code>album.json</code>{t('; its parent folders become groups. Tick a root folder to')}{' '}<b>{t('ignore')}</b>{' '}{t('it (e.g. folders that aren\'t albums).')}</p>
+      {err && <p className="note" style={{ color: 'var(--bad)' }}>{t('Scan failed: {err}', { err: err })}</p>}
+      {!scan && !err && <p className="note">{t('Scanning…')}</p>}
       {scan && (
         <>
-          <div className="section">Root folders</div>
-          {!scan.rootFolders.length && <p className="note">No folders at the backup root yet.</p>}
+          <div className="section">{t('Root folders')}</div>
+          {!scan.rootFolders.length && <p className="note">{t('No folders at the backup root yet.')}</p>}
           {scan.rootFolders.map((name) => {
             const count = scan.albums.filter((a) => (a.groupPath[0] || a.folderName) === name).length;
             return (
@@ -38,7 +39,7 @@ export default function Import({ onScan, ignored, onApply, onClose }) {
               </label>
             );
           })}
-          <p className="note" style={{ marginTop: 10 }}><b>{importable.length}</b> album{importable.length === 1 ? '' : 's'} across {new Set(importable.map((a) => a.groupPath.join('/'))).size} group path(s) will be synced. Existing albums are matched and left as-is; new ones are added.</p>
+          <p className="note" style={{ marginTop: 10 }}><b>{importable.length}</b>{' '}{t('album')}{importable.length === 1 ? '' : 's'}{' '}{t('across {size} group path(s) will be synced. Existing albums are matched and left as-is; new ones are added.', { size: new Set(importable.map((a) => a.groupPath.join('/'))).size })}</p>
         </>
       )}
     </Dialog>

@@ -14,6 +14,7 @@ import { THEMES } from '../state/themes.js';
 import { isGap, trackKey, duplicateIds } from '../album/skeleton.js';
 import { usePlayer } from './usePlayer.js';
 import Waveform from './Waveform.jsx';
+import { t } from '../i18n.js';
 
 // The album builder: curate prompts, generate music, splice dialog / uploads, reorder, edit
 // (trim/fade/volume), and preview. `updateProject((prev)=>next)` persists.
@@ -92,99 +93,99 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
   return (
     <div>
       <div className="row" style={{ marginBottom: 8 }}>
-        <button className="cover" title="Album cover — click to set" onClick={() => pickFile('image/*').then((fs) => fs[0] && onSetCover(fs[0]))}>
-          {coverUrl ? <img src={coverUrl} alt="cover" /> : <span>＋<br />cover</span>}
+        <button className="cover" title={t('Album cover — click to set')} onClick={() => pickFile('image/*').then((fs) => fs[0] && onSetCover(fs[0]))}>
+          {coverUrl ? <img src={coverUrl} alt={t('cover')} /> : <span>＋<br />{t('cover')}</span>}
         </button>
         <div className="grow" style={{ minWidth: 0 }}>
-          <div className="row"><input className="grow" value={project.title} onChange={(e) => setMeta('title', e.target.value)} placeholder="Album title" style={{ fontSize: 18, fontWeight: 600 }} /></div>
+          <div className="row"><input className="grow" value={project.title} onChange={(e) => setMeta('title', e.target.value)} placeholder={t('Album title')} style={{ fontSize: 18, fontWeight: 600 }} /></div>
           <div className="row" style={{ marginTop: 4 }}>
-            <input value={project.artist || ''} onChange={(e) => setMeta('artist', e.target.value)} placeholder="Artist" style={{ maxWidth: 200 }} />
+            <input value={project.artist || ''} onChange={(e) => setMeta('artist', e.target.value)} placeholder={t('Artist')} style={{ maxWidth: 200 }} />
             <Stars value={project.rating || 0} onChange={(v) => setMeta('rating', v)} calc={ar.calc} n={ar.n} size={16} />
-            <button className={`mini${hasNotes(project) ? ' primary' : ''}`} onClick={() => toggleNotes('album')} title="Album notes, likes and dislikes">📝</button>
-            <button className="mini" onClick={onDuplicateAlbum} title="Duplicate this album">⧉ Duplicate</button>
-            <button className="mini" onClick={onCopyPath} disabled={!backupReady} title="Open this album's folder in File Explorer (or copy its path)">📂 Open folder</button>
-            {coverUrl && <button className="mini" onClick={onClearCover}>Remove cover</button>}
+            <button className={`mini${hasNotes(project) ? ' primary' : ''}`} onClick={() => toggleNotes('album')} title={t('Album notes, likes and dislikes')}>📝</button>
+            <button className="mini" onClick={onDuplicateAlbum} title={t('Duplicate this album')}>{t('⧉ Duplicate')}</button>
+            <button className="mini" onClick={onCopyPath} disabled={!backupReady} title={t('Open this album\'s folder in File Explorer (or copy its path)')}>{t('📂 Open folder')}</button>
+            {coverUrl && <button className="mini" onClick={onClearCover}>{t('Remove cover')}</button>}
           </div>
         </div>
       </div>
       {group && (
         <div className="row" style={{ marginBottom: 8, fontSize: 12 }}>
           <span className="dim">📁 {group.name}</span>
-          <span className="dim">· 🎨 theme</span>
-          <select value={group.theme || 'default'} onChange={(e) => onTheme(e.target.value)} style={{ width: 'auto' }} title="Visual theme for this album's group">
+          <span className="dim">{t('· 🎨 theme')}</span>
+          <select value={group.theme || 'default'} onChange={(e) => onTheme(e.target.value)} style={{ width: 'auto' }} title={t('Visual theme for this album\'s group')}>
             {Object.entries(THEMES).map(([k, tk]) => <option key={k} value={k}>{tk.label}</option>)}
           </select>
         </div>
       )}
-      <textarea value={project.description || ''} onChange={(e) => setMeta('description', e.target.value)} placeholder="Album description / creative brief — the skeleton an external Claude Code session will build from…" style={{ marginBottom: 8, minHeight: 40 }} />
+      <textarea value={project.description || ''} onChange={(e) => setMeta('description', e.target.value)} placeholder={t('Album description / creative brief — the skeleton an external Claude Code session will build from…')} style={{ marginBottom: 8, minHeight: 40 }} />
       <div className="row" style={{ marginBottom: 10, flexWrap: 'wrap' }}>
-        <button onClick={onMetadata}>🏷 Metadata…</button>
-        <button onClick={onAttachments}>📎 Attachments{project.attachments?.length ? ` (${project.attachments.length})` : ''}…</button>
-        <button onClick={() => writeSkeleton()} disabled={!backupReady} title="Write album.json + AGENT.md to the backup folder">⤓ Write skeleton</button>
-        <button onClick={onLoadSkeleton} disabled={!backupReady} title="Re-import album.json edited by an agent">⤒ Load skeleton</button>
-        <button onClick={onScanFolder} disabled={!backupReady} title="Scan this album's folder — recover audio for gap tracks and import any loose audio files">🔎 Scan folder</button>
+        <button onClick={onMetadata}>{t('🏷 Metadata…')}</button>
+        <button onClick={onAttachments}>{t('📎 Attachments')}{project.attachments?.length ? ` (${project.attachments.length})` : ''}…</button>
+        <button onClick={() => writeSkeleton()} disabled={!backupReady} title={t('Write album.json + AGENT.md to the backup folder')}>{t('⤓ Write skeleton')}</button>
+        <button onClick={onLoadSkeleton} disabled={!backupReady} title={t('Re-import album.json edited by an agent')}>{t('⤒ Load skeleton')}</button>
+        <button onClick={onScanFolder} disabled={!backupReady} title={t('Scan this album\'s folder — recover audio for gap tracks and import any loose audio files')}>{t('🔎 Scan folder')}</button>
       </div>
 
       {openNotes.has('album') && <NotesPanel obj={project} what="album" onChange={(up) => updateProject((p) => ({ ...p, ...up }))} />}
       <AttachmentStrip list={project.attachments} />
 
-      {!backupReady && <p className="note" style={{ color: 'var(--warn)' }}>⚠ Set a backup folder outside the app (Settings) — required before generating, and where the album skeleton is exposed for an external agent.</p>}
+      {!backupReady && <p className="note" style={{ color: 'var(--warn)' }}>{t('⚠ Set a backup folder outside the app (Settings) — required before generating, and where the album skeleton is exposed for an external agent.')}</p>}
 
       <div className="row" style={{ marginBottom: 14, flexWrap: 'wrap' }}>
-        <button onClick={addMusic}>＋ Song</button>
-        <button onClick={addDialog}>＋ Dialog</button>
-        <button onClick={addUploads}>⭱ Upload audio</button>
-        <button onClick={() => setTracks((ts) => [...ts, { id: uid('t_'), type: 'sfx', title: 'Sound effect', text: '', sfxDuration: 0, loop: false, promptInfluence: 0.3, sfxModel: SFX_MODELS[0].id, status: 'idle', gain: 1 }])} title="A sound-effect track (0.5–30 s) — transitions, interludes, ambience">＋ Sound effect</button>
-        <button onClick={onFromSong} title="Reverse-engineer an existing song into a plan — recreate it, make siblings in its style">🎧 From a song…</button>
-        <button onClick={onFromVideo} title="Score one or more video clips">🎬 From video…</button>
-        <button onClick={() => onGenerate(gaps.map((tk) => tk.id))} disabled={!gaps.some((tk) => tk.status !== 'queued' && tk.status !== 'gen') || !backupReady} title={`Queue every track that has no audio yet — est. ${fmtUsd(gapCost)}. Keeps running while you browse other albums.`}>{queued ? `⏳ ${queued} queued for this album` : `⚡ Generate all gaps${gaps.length ? ` (${gaps.length}, ~${fmtUsd(gapCost)})` : ''}`}</button>
+        <button onClick={addMusic}>{t('＋ Song')}</button>
+        <button onClick={addDialog}>{t('＋ Dialog')}</button>
+        <button onClick={addUploads}>{t('⭱ Upload audio')}</button>
+        <button onClick={() => setTracks((ts) => [...ts, { id: uid('t_'), type: 'sfx', title: 'Sound effect', text: '', sfxDuration: 0, loop: false, promptInfluence: 0.3, sfxModel: SFX_MODELS[0].id, status: 'idle', gain: 1 }])} title={t('A sound-effect track (0.5–30 s) — transitions, interludes, ambience')}>{t('＋ Sound effect')}</button>
+        <button onClick={onFromSong} title={t('Reverse-engineer an existing song into a plan — recreate it, make siblings in its style')}>{t('🎧 From a song…')}</button>
+        <button onClick={onFromVideo} title={t('Score one or more video clips')}>{t('🎬 From video…')}</button>
+        <button onClick={() => onGenerate(gaps.map((tk) => tk.id))} disabled={!gaps.some((tk) => tk.status !== 'queued' && tk.status !== 'gen') || !backupReady} title={t('Queue every track that has no audio yet — est. {usd}. Keeps running while you browse other albums.', { usd: fmtUsd(gapCost) })}>{queued ? t('⏳ {queued} queued for this album', { queued: queued }) : t('⚡ Generate all gaps{value}', { value: gaps.length ? ` (${gaps.length}, ~${fmtUsd(gapCost)})` : '' })}</button>
         <div className="grow" />
-        <button onClick={() => player.playQueue(tracks.filter((tk) => tk.clipId))} disabled={!readyCount}>▶ Play all</button>
-        <button onClick={() => player.enqueue(tracks.filter((tk) => tk.clipId))} disabled={!readyCount} title="Add this album to the end of the play queue">＋♫ Queue</button>
-        <button onClick={onPublish} disabled={!readyCount} title={publishName ? `Write tagged tracks + playlist to ${publishName}/` : 'Set a publish folder in Settings (e.g. a phone-synced drive)'}>⇪ Publish</button>
-        <button className="primary" onClick={onExport} disabled={!readyCount}>⤓ Export album</button>
+        <button onClick={() => player.playQueue(tracks.filter((tk) => tk.clipId))} disabled={!readyCount}>{t('▶ Play all')}</button>
+        <button onClick={() => player.enqueue(tracks.filter((tk) => tk.clipId))} disabled={!readyCount} title={t('Add this album to the end of the play queue')}>{t('＋♫ Queue')}</button>
+        <button onClick={onPublish} disabled={!readyCount} title={publishName ? t('Write tagged tracks + playlist to {publishName}/', { publishName: publishName }) : t('Set a publish folder in Settings (e.g. a phone-synced drive)')}>{t('⇪ Publish')}</button>
+        <button className="primary" onClick={onExport} disabled={!readyCount}>{t('⤓ Export album')}</button>
       </div>
-      <p className="note">{tracks.length} track{tracks.length === 1 ? '' : 's'} · {readyCount} ready · {gaps.length} gap{gaps.length === 1 ? '' : 's'} · {fmtDuration(totalMs)}</p>
-      {dups.size > 0 && <p className="note" style={{ color: 'var(--warn)' }}>⚠ {dups.size} duplicate track{dups.size === 1 ? '' : 's'} (same prompt/voice) — “Generate all gaps” reuses audio instead of paying twice.</p>}
+      <p className="note">{t.n('{n} track', '{n} tracks', tracks.length)}{' '}{t.n('· {count} ready · {n} gap', '· {count} ready · {n} gaps', gaps.length, { count: readyCount })} · {fmtDuration(totalMs)}</p>
+      {dups.size > 0 && <p className="note" style={{ color: 'var(--warn)' }}>{t.n('⚠ {n} duplicate track', '⚠ {n} duplicate tracks', dups.size)}{' '}{t('(same prompt/voice) — “Generate all gaps” reuses audio instead of paying twice.')}</p>}
 
       {sel.size > 0 && (
         <div className="row" style={{ margin: '4px 0 10px', gap: 6, background: 'var(--panel2)', border: '1px solid var(--accent)', borderRadius: 8, padding: '6px 8px', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 13 }}>{sel.size} selected</span>
-          <button className="mini" onClick={() => player.playQueue(tracks.filter((tk) => sel.has(tk.id) && tk.clipId))}>▶ Play</button>
+          <span style={{ fontSize: 13 }}>{t('{size} selected', { size: sel.size })}</span>
+          <button className="mini" onClick={() => player.playQueue(tracks.filter((tk) => sel.has(tk.id) && tk.clipId))}>{t('▶ Play')}</button>
           {staticPlaylists.length > 0 && (
             <select value="" onChange={(e) => { if (e.target.value) { onAddToPlaylist([...sel].map((id) => ({ projectId: project.id, trackId: id })), e.target.value); setSel(new Set()); } }} style={{ width: 'auto' }}>
-              <option value="">＋ Add to playlist…</option>
+              <option value="">{t('＋ Add to playlist…')}</option>
               {staticPlaylists.map((pl) => <option key={pl.id} value={pl.id}>{pl.name}</option>)}
             </select>
           )}
-          <button className="mini danger" onClick={deleteSelected}>🗑 Delete</button>
+          <button className="mini danger" onClick={deleteSelected}>{t('🗑 Delete')}</button>
           <div className="grow" />
-          <button className="mini" onClick={() => setSel(new Set())}>Clear</button>
+          <button className="mini" onClick={() => setSel(new Set())}>{t('Clear')}</button>
         </div>
       )}
 
 
-      {!tracks.length && <div className="empty">Add a song, dialog line, or upload to start building your album.</div>}
+      {!tracks.length && <div className="empty">{t('Add a song, dialog line, or upload to start building your album.')}</div>}
 
       {tracks.map((tk, i) => (
         <div key={tk.id} className={`track ${player.playing === tk.id ? 'playing' : ''}`}>
           <div className="track-head">
-            <input type="checkbox" checked={sel.has(tk.id)} onChange={() => toggleSel(tk.id)} style={{ width: 'auto' }} title="Select track" />
+            <input type="checkbox" checked={sel.has(tk.id)} onChange={() => toggleSel(tk.id)} style={{ width: 'auto' }} title={t('Select track')} />
             <span className={`badge ${tk.type}`}>{tk.type}</span>
             <Stars value={tk.rating || 0} onChange={(v) => patch(tk.id, { rating: v })} size={12} />
-            <button className="mini" onClick={() => patch(tk.id, { fav: !tk.fav })} title={tk.fav ? 'Unfavorite' : 'Favorite'} style={{ color: tk.fav ? 'var(--gold, #f5c451)' : 'var(--dim)', border: 'none', background: 'none', padding: 0 }}>{tk.fav ? '★' : '☆'}</button>
-            {tk.qc && <span className="badge" style={{ color: QC_COLOR[tk.qc.grade], borderColor: QC_COLOR[tk.qc.grade] }} title={qcTitle(tk.qc)}>QC {tk.qc.grade}{tk.qc.flags?.length ? ' ⚠' : ''}</span>}
-            {(tk.takes?.length || 0) > 0 && <span className="badge" title="Other takes of this track (open ▸ Takes below)">{tk.takes.length + 1} takes</span>}
-            {dups.has(tk.id) && <span className="badge" style={{ color: 'var(--warn)', borderColor: 'var(--warn)' }} title="Same content as an earlier track — bulk-generate reuses its audio instead of paying again">⚠ dup</span>}
+            <button className="mini" onClick={() => patch(tk.id, { fav: !tk.fav })} title={tk.fav ? t('Unfavorite') : t('Favorite')} style={{ color: tk.fav ? 'var(--gold, #f5c451)' : 'var(--dim)', border: 'none', background: 'none', padding: 0 }}>{tk.fav ? '★' : '☆'}</button>
+            {tk.qc && <span className="badge" style={{ color: QC_COLOR[tk.qc.grade], borderColor: QC_COLOR[tk.qc.grade] }} title={qcTitle(tk.qc)}>{t('QC {grade}', { grade: tk.qc.grade })}{tk.qc.flags?.length ? ' ⚠' : ''}</span>}
+            {(tk.takes?.length || 0) > 0 && <span className="badge" title={t('Other takes of this track (open ▸ Takes below)')}>{t('{n} takes', { n: tk.takes.length + 1 })}</span>}
+            {dups.has(tk.id) && <span className="badge" style={{ color: 'var(--warn)', borderColor: 'var(--warn)' }} title={t('Same content as an earlier track — bulk-generate reuses its audio instead of paying again')}>{t('⚠ dup')}</span>}
             <input className="grow" value={tk.title} onChange={(e) => patch(tk.id, { title: e.target.value })} />
             {tk.clipId && <span className="dim" style={{ fontSize: 12 }}>{fmtDuration(tk.durationMs)}</span>}
-            <button className="mini" onClick={() => move(tk.id, -1)} disabled={i === 0} title="Move up">▲</button>
-            <button className="mini" onClick={() => move(tk.id, 1)} disabled={i === tracks.length - 1} title="Move down">▼</button>
+            <button className="mini" onClick={() => move(tk.id, -1)} disabled={i === 0} title={t('Move up')}>▲</button>
+            <button className="mini" onClick={() => move(tk.id, 1)} disabled={i === tracks.length - 1} title={t('Move down')}>▼</button>
             {tk.clipId && <button className="mini" onClick={() => player.play(tk, tracks)}>{player.playing === tk.id ? (player.paused ? '▶' : '⏸') : '▶'}</button>}
-            {tk.clipId && <button className="mini" onClick={() => player.enqueue([tk])} title="Add to the end of the play queue">＋♫</button>}
-            {tk.clipId && <button className="mini" onClick={() => toggleEdit(tk.id)} title="Trim / fade">✎</button>}
-            <button className={`mini${hasNotes(tk) ? ' primary' : ''}`} onClick={() => toggleNotes(tk.id)} title="Notes, likes and dislikes for this song">📝</button>
-            <button className="mini" onClick={() => duplicateTrack(tk)} title="Duplicate track">⧉</button>
+            {tk.clipId && <button className="mini" onClick={() => player.enqueue([tk])} title={t('Add to the end of the play queue')}>＋♫</button>}
+            {tk.clipId && <button className="mini" onClick={() => toggleEdit(tk.id)} title={t('Trim / fade')}>✎</button>}
+            <button className={`mini${hasNotes(tk) ? ' primary' : ''}`} onClick={() => toggleNotes(tk.id)} title={t('Notes, likes and dislikes for this song')}>📝</button>
+            <button className="mini" onClick={() => duplicateTrack(tk)} title={t('Duplicate track')}>⧉</button>
             <button className="mini danger" onClick={() => remove(tk)}>🗑</button>
           </div>
 
@@ -194,56 +195,55 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
           {tk.type === 'music' && <MusicFields t={tk} patch={(up) => patch(tk.id, up)} prefs={prefs} apiKey={apiKey} player={player} finetunes={finetunes} onDeleteTakes={onDeleteTakes} onInpaint={onInpaint} />}
           {tk.type === 'dialog' && (
             <>
-              <label>Text</label>
-              <textarea value={tk.text} onChange={(e) => patch(tk.id, { text: e.target.value })} placeholder="Spoken line to splice into the album…" />
+              <label>{t('Text')}</label>
+              <textarea value={tk.text} onChange={(e) => patch(tk.id, { text: e.target.value })} placeholder={t('Spoken line to splice into the album…')} />
               <div className="row" style={{ marginTop: 6 }}>
-                <div className="grow"><label>Voice</label><select value={tk.voiceId} onChange={(e) => patch(tk.id, { voiceId: e.target.value, voiceName: voices.find((v) => v.id === e.target.value)?.name || '' })}>
-                  <option value="">{voices.length ? '— pick a voice —' : '— test key in Settings to load voices —'}</option>
+                <div className="grow"><label>{t('Voice')}</label><select value={tk.voiceId} onChange={(e) => patch(tk.id, { voiceId: e.target.value, voiceName: voices.find((v) => v.id === e.target.value)?.name || '' })}>
+                  <option value="">{voices.length ? t('— pick a voice —') : t('— test key in Settings to load voices —')}</option>
                   {voices.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
                 </select></div>
-                <div className="grow"><label>Model</label><select value={tk.ttsModel} onChange={(e) => patch(tk.id, { ttsModel: e.target.value })}>{ttsModels.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select></div>
+                <div className="grow"><label>{t('Model')}</label><select value={tk.ttsModel} onChange={(e) => patch(tk.id, { ttsModel: e.target.value })}>{ttsModels.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select></div>
               </div>
             </>
           )}
           {tk.type === 'sfx' && (
             <>
-              <label>Sound to make</label>
-              <textarea value={tk.text || ''} onChange={(e) => patch(tk.id, { text: e.target.value })} placeholder="e.g. heavy door slams shut in a stone hall, long echo" />
+              <label>{t('Sound to make')}</label>
+              <textarea value={tk.text || ''} onChange={(e) => patch(tk.id, { text: e.target.value })} placeholder={t('e.g. heavy door slams shut in a stone hall, long echo')} />
               <div className="row" style={{ marginTop: 6, flexWrap: 'wrap' }}>
-                <div><label>Length (s, 0 = auto)</label><input type="number" min="0" max="30" step="0.5" value={tk.sfxDuration || 0} onChange={(e) => patch(tk.id, { sfxDuration: Math.max(0, Math.min(30, +e.target.value)) })} style={{ width: 90 }} /></div>
-                <div><label>Follow prompt</label><input type="range" min="0" max="1" step="0.05" value={tk.promptInfluence ?? 0.3} onChange={(e) => patch(tk.id, { promptInfluence: +e.target.value })} style={{ width: 110 }} /></div>
-                <div className="grow"><label>Model</label><select value={tk.sfxModel || SFX_MODELS[0].id} onChange={(e) => patch(tk.id, { sfxModel: e.target.value })}>{SFX_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select></div>
-                <label style={{ marginTop: 20 }}><input type="checkbox" checked={!!tk.loop} onChange={(e) => patch(tk.id, { loop: e.target.checked })} style={{ width: 'auto', marginRight: 5 }} />Loop seamlessly</label>
+                <div><label>{t('Length (s, 0 = auto)')}</label><input type="number" min="0" max="30" step="0.5" value={tk.sfxDuration || 0} onChange={(e) => patch(tk.id, { sfxDuration: Math.max(0, Math.min(30, +e.target.value)) })} style={{ width: 90 }} /></div>
+                <div><label>{t('Follow prompt')}</label><input type="range" min="0" max="1" step="0.05" value={tk.promptInfluence ?? 0.3} onChange={(e) => patch(tk.id, { promptInfluence: +e.target.value })} style={{ width: 110 }} /></div>
+                <div className="grow"><label>{t('Model')}</label><select value={tk.sfxModel || SFX_MODELS[0].id} onChange={(e) => patch(tk.id, { sfxModel: e.target.value })}>{SFX_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select></div>
+                <label style={{ marginTop: 20 }}><input type="checkbox" checked={!!tk.loop} onChange={(e) => patch(tk.id, { loop: e.target.checked })} style={{ width: 'auto', marginRight: 5 }} />{t('Loop seamlessly')}</label>
               </div>
             </>
           )}
           {tk.type === 'upload' && (
-            <p className="note">Uploaded file: {tk.fileName}{' '}
-              <button className="mini" title="Turn this upload into a song entry: keep the audio, add the prompt it was made from"
-                onClick={() => patch(tk.id, { type: 'music', prompt: '', lengthMs: Math.max(3000, Math.min(600000, Math.round((tk.durationMs || 60000) / 1000) * 1000)), ...newTrackModel(prefs), instrumental: false })}>＋ Add prompt (make it a song)</button>
+            <p className="note">{t('Uploaded file: {fileName}', { fileName: tk.fileName })}{' '}<button className="mini" title={t('Turn this upload into a song entry: keep the audio, add the prompt it was made from')}
+                onClick={() => patch(tk.id, { type: 'music', prompt: '', lengthMs: Math.max(3000, Math.min(600000, Math.round((tk.durationMs || 60000) / 1000) * 1000)), ...newTrackModel(prefs), instrumental: false })}>{t('＋ Add prompt (make it a song)')}</button>
             </p>
           )}
 
           <div className="row" style={{ marginTop: 8, flexWrap: 'wrap' }}>
-            {tk.clipId && tk.type !== 'dialog' && <select className="mini" value="" onChange={(e) => { if (e.target.value) onStems(tk, e.target.value); }} style={{ width: 'auto' }} title="Split into stems (vocals, drums, bass…) — written to the album's stems/ folder"><option value="">🎚 Stems…</option><option value="six_stems_v1">6 stems</option><option value="two_stems_v1">2 stems (vocals / music)</option></select>}
+            {tk.clipId && tk.type !== 'dialog' && <select className="mini" value="" onChange={(e) => { if (e.target.value) onStems(tk, e.target.value); }} style={{ width: 'auto' }} title={t('Split into stems (vocals, drums, bass…) — written to the album\'s stems/ folder')}><option value="">{t('🎚 Stems…')}</option><option value="six_stems_v1">{t('6 stems')}</option><option value="two_stems_v1">{t('2 stems (vocals / music)')}</option></select>}
             {tk.type !== 'upload' && (
               <button className="mini" onClick={() => onGenerate([tk.id])} disabled={tk.status === 'gen' || tk.status === 'queued' || (tk.type === 'sfx' ? !tk.text?.trim() : tk.type === 'music' ? (tk.usePlan ? !tk.plan?.chunks?.length : !tk.prompt?.trim() || tk.prompt.length > MUSIC_PROMPT_MAX) : !(tk.text.trim() && tk.voiceId))}>
-                {tk.status === 'gen' ? '… generating' : tk.status === 'queued' ? '⏳ queued' : tk.clipId ? '↻ Regenerate' : '✦ Generate'}
+                {tk.status === 'gen' ? t('… generating') : tk.status === 'queued' ? t('⏳ queued') : tk.clipId ? t('↻ Regenerate') : t('✦ Generate')}
               </button>
             )}
-            <button className="mini" onClick={() => (linking?.id === tk.id ? setLinking(null) : startLink(tk))} title="Use an audio file that already exists — from this album's folder or your computer. No regeneration, no spend.">📎 {tk.clipId ? 'Relink' : 'Link file'}</button>
+            <button className="mini" onClick={() => (linking?.id === tk.id ? setLinking(null) : startLink(tk))} title={t('Use an audio file that already exists — from this album\'s folder or your computer. No regeneration, no spend.')}>📎 {tk.clipId ? t('Relink') : t('Link file')}</button>
             <span className={`status ${tk.status === 'error' ? 'err' : ''}`}>
-              {tk.status === 'gen' ? 'Calling ElevenLabs…' : tk.status === 'queued' ? 'Waiting in the generation queue' : tk.status === 'error' ? '⚠ ' + tk.error : tk.clipId ? '✓ ready' : ''}
+              {tk.status === 'gen' ? t('Calling ElevenLabs…') : tk.status === 'queued' ? t('Waiting in the generation queue') : tk.status === 'error' ? '⚠ ' + tk.error : tk.clipId ? t('✓ ready') : ''}
             </span>
             <div className="grow" />
-            <input value={tk.sourceUrl || ''} onChange={(e) => patch(tk.id, { sourceUrl: e.target.value.trim() })} placeholder="🔗 song page URL (e.g. ElevenLabs)" title="The web page this song was generated on" style={{ width: 230, fontSize: 12, padding: '3px 7px' }} />
-            {safeUrl(tk.sourceUrl) && <a href={safeUrl(tk.sourceUrl)} target="_blank" rel="noopener noreferrer" title="Open the page this song was generated on">↗</a>}
-            {tk.clipId && <span className="gain">vol <input type="range" min="0" max="1.5" step="0.05" value={tk.gain ?? 1} onChange={(e) => patch(tk.id, { gain: +e.target.value })} />{Math.round((tk.gain ?? 1) * 100)}%</span>}
+            <input value={tk.sourceUrl || ''} onChange={(e) => patch(tk.id, { sourceUrl: e.target.value.trim() })} placeholder={t('🔗 song page URL (e.g. ElevenLabs)')} title={t('The web page this song was generated on')} style={{ width: 230, fontSize: 12, padding: '3px 7px' }} />
+            {safeUrl(tk.sourceUrl) && <a href={safeUrl(tk.sourceUrl)} target="_blank" rel="noopener noreferrer" title={t('Open the page this song was generated on')}>↗</a>}
+            {tk.clipId && <span className="gain">{t('vol')}{' '}<input type="range" min="0" max="1.5" step="0.05" value={tk.gain ?? 1} onChange={(e) => patch(tk.id, { gain: +e.target.value })} />{Math.round((tk.gain ?? 1) * 100)}%</span>}
           </div>
 
           {tk.stems?.length > 0 && (
             <div className="row" style={{ marginTop: 6, flexWrap: 'wrap', gap: 4, fontSize: 12 }}>
-              <span className="dim">🎚 Stems:</span>
+              <span className="dim">{t('🎚 Stems:')}</span>
               {tk.stems.map((st) => { const tr = { ...st, id: st.clipId, title: `${tk.title} · ${st.name}`, gain: 1 }; return <button key={st.clipId} className="mini" onClick={() => player.play(tr, tk.stems.map((x) => ({ ...x, id: x.clipId, title: `${tk.title} · ${x.name}`, gain: 1 })))} title={st.file}>{player.playing === st.clipId && !player.paused ? '⏸' : '▶'} {st.name}</button>; })}
             </div>
           )}
@@ -251,13 +251,13 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
             <div className="row" style={{ marginTop: 6, flexWrap: 'wrap' }}>
               {backupReady && (
                 <select value="" onChange={(e) => e.target.value && doLink(tk, e.target.value)} className="grow" style={{ minWidth: 220 }}>
-                  <option value="">{linking.files === null ? 'Reading the album folder…' : linking.files.length ? `Pick a file in this album's folder (${linking.files.length})…` : 'No audio files in this album’s folder'}</option>
-                  {(linking.files || []).map((f) => <option key={f.name} value={f.name}>{f.match ? '★ ' : ''}{f.used ? '(in use) ' : ''}{f.name}</option>)}
+                  <option value="">{linking.files === null ? t('Reading the album folder…') : linking.files.length ? t('Pick a file in this album\'s folder ({count})…', { count: linking.files.length }) : t('No audio files in this album’s folder')}</option>
+                  {(linking.files || []).map((f) => <option key={f.name} value={f.name}>{f.match ? '★ ' : ''}{f.used ? t('(in use) ') : ''}{f.name}</option>)}
                 </select>
               )}
-              <button className="mini" onClick={() => pickFile('audio/*').then((fs) => fs[0] && doLink(tk, fs[0]))}>From computer…</button>
-              <button className="mini" onClick={() => setLinking(null)}>Cancel</button>
-              <span className="dim" style={{ fontSize: 11 }}>★ = name matches this track</span>
+              <button className="mini" onClick={() => pickFile('audio/*').then((fs) => fs[0] && doLink(tk, fs[0]))}>{t('From computer…')}</button>
+              <button className="mini" onClick={() => setLinking(null)}>{t('Cancel')}</button>
+              <span className="dim" style={{ fontSize: 11 }}>{t('★ = name matches this track')}</span>
             </div>
           )}
 
@@ -266,7 +266,7 @@ export default function Editor({ project, apiKey, prefs, voices, ttsModels = TTS
               {[['trimStartMs', 'trim in'], ['trimEndMs', 'trim out'], ['fadeInMs', 'fade in'], ['fadeOutMs', 'fade out']].map(([k, lbl]) => (
                 <span key={k}>{lbl} <input type="number" min="0" step="0.1" value={editSec(tk, k)} onChange={(e) => patch(tk.id, { [k]: Math.max(0, +e.target.value * 1000) })} style={{ width: 60 }} />s</span>
               ))}
-              <span>· applied on export &amp; album mix</span>
+              <span>{t('· applied on export &amp; album mix')}</span>
             </div>
           )}
         </div>

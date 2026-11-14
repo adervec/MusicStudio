@@ -1,16 +1,21 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import App from './App.jsx';
-import { PlayerProvider } from './components/usePlayer.js';
 import './index.css';
 
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <PlayerProvider>
-      <App />
-    </PlayerProvider>
-  </StrictMode>,
-);
+// Translations load first (font.js fetches locales/<lang>.json), then the app is imported, so even
+// module-level labels come out in the reader's language. A slow or missing dictionary never blocks
+// the app for long: it falls back to English after 3 s.
+const translationsReady = Promise.race([window.appFont?.ready || Promise.resolve(), new Promise((r) => setTimeout(r, 3000))]).catch(() => {});
+translationsReady.then(async () => {
+  const [{ default: App }, { PlayerProvider }] = await Promise.all([import('./App.jsx'), import('./components/usePlayer.js')]);
+  createRoot(document.getElementById('root')).render(
+    <StrictMode>
+      <PlayerProvider>
+        <App />
+      </PlayerProvider>
+    </StrictMode>,
+  );
+});
 
 // Let the maker's app portal know (same-origin localStorage) that this app is installed.
 try {

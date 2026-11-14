@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { getAttachment } from '../state/db.js';
 import { download } from '../backup/fs.js';
 import { renderMarkdown, parseCsv } from '../album/markdown.js';
+import { t, fmtNum } from '../i18n.js';
 
-const fmtSize = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + ' MB' : n >= 1e3 ? Math.round(n / 1e3) + ' KB' : (n || 0) + ' B');
+const fmtSize = (n) => (n >= 1e6 ? fmtNum(n / 1e6, 1) + ' MB' : n >= 1e3 ? fmtNum(Math.round(n / 1e3), 0) + ' KB' : fmtNum(n || 0, 0) + ' B');
 const TEXT_RE = /\.(md|markdown|txt|json|csv|tsv|log|lrc|srt|vtt|html?|xml|css|js|yaml|yml|ini)$/i;
 
 // What a file is, for picking its view. Notes are markdown.
@@ -45,8 +46,8 @@ export default function AttachmentPreview({ a }) {
     return () => { live = false; if (url) URL.revokeObjectURL(url); };
   }, [a.id, a.name, a.mime]);
 
-  if (st.loading) return <div className="att-card"><div className="att-body dim">Loading…</div></div>;
-  if (st.missing) return <div className="att-card"><div className="att-body dim">This attachment's content isn't in the browser store.</div></div>;
+  if (st.loading) return <div className="att-card"><div className="att-body dim">{t('Loading…')}</div></div>;
+  if (st.missing) return <div className="att-card"><div className="att-body dim">{t('This attachment\'s content isn\'t in the browser store.')}</div></div>;
   const { kind, text, url, blob } = st;
   const showSource = source && HAS_SOURCE.has(kind);
 
@@ -63,7 +64,7 @@ export default function AttachmentPreview({ a }) {
       <div className="att-body att-table">
         <table><thead><tr>{(rows[0] || []).map((h, i) => <th key={i}>{h}</th>)}</tr></thead>
           <tbody>{rows.slice(1, 1001).map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j}>{c}</td>)}</tr>)}</tbody></table>
-        {rows.length > 1001 && <p className="note">First 1,000 rows of {rows.length - 1}.</p>}
+        {rows.length > 1001 && <p className="note">{t('First 1,000 rows of {n}.', { n: rows.length - 1 })}</p>}
       </div>
     );
   } else if (kind === 'image' || kind === 'svg') body = <div className="att-body att-media"><img src={url} alt={a.name} /></div>; // <img> never runs SVG scripts
@@ -71,7 +72,7 @@ export default function AttachmentPreview({ a }) {
   else if (kind === 'video') body = <div className="att-body att-media"><video src={url} controls /></div>;
   else if (kind === 'pdf') body = <iframe className="att-body att-frame" src={url} title={a.name} />;
   else if (kind === 'text') body = <pre className="att-body att-code">{text}</pre>;
-  else body = <div className="att-body dim">No preview for this file type — download it to open.</div>;
+  else body = <div className="att-body dim">{t('No preview for this file type — download it to open.')}</div>;
 
   return (
     <div className="att-card" ref={box}>
@@ -82,12 +83,12 @@ export default function AttachmentPreview({ a }) {
         <div className="grow" />
         {HAS_SOURCE.has(kind) && (
           <span className="att-seg">
-            <button className={`mini${!source ? ' primary' : ''}`} onClick={() => setSource(false)}>Rendered</button>
-            <button className={`mini${source ? ' primary' : ''}`} onClick={() => setSource(true)}>Source</button>
+            <button className={`mini${!source ? ' primary' : ''}`} onClick={() => setSource(false)}>{t('Rendered')}</button>
+            <button className={`mini${source ? ' primary' : ''}`} onClick={() => setSource(true)}>{t('Source')}</button>
           </span>
         )}
-        <button className="mini" onClick={() => (document.fullscreenElement ? document.exitFullscreen() : box.current?.requestFullscreen?.())} title="Fullscreen (Esc to exit)">⤢</button>
-        <button className="mini" onClick={() => download(blob, a.kind === 'note' ? `${a.name || 'note'}.md` : a.name)} title="Download">⤓</button>
+        <button className="mini" onClick={() => (document.fullscreenElement ? document.exitFullscreen() : box.current?.requestFullscreen?.())} title={t('Fullscreen (Esc to exit)')}>⤢</button>
+        <button className="mini" onClick={() => download(blob, a.kind === 'note' ? `${a.name || 'note'}.md` : a.name)} title={t('Download')}>⤓</button>
       </div>
       {body}
     </div>

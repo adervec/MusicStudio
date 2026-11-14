@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { usePlayer } from './usePlayer.js';
 import { fmtDuration } from '../state/pricing.js';
 import { resolvePlaylist, ruleLabel, DYNAMIC_FIELDS } from '../album/playlists.js';
+import { t } from '../i18n.js';
 
 // A static (curated) or dynamic (rule-based) playlist: play it (with shuffle/repeat), and edit it —
 // reorder/add/remove for static, or configure the rule for dynamic. onChange persists.
@@ -25,32 +26,32 @@ export default function PlaylistView({ playlist, projects, groups, onChange, onR
     <div>
       <div className="row" style={{ marginBottom: 8 }}>
         <h2 style={{ fontSize: 20 }}>▤ {playlist.name}</h2>
-        <span className="dim" style={{ fontSize: 12 }}>{playlist.kind === 'static' ? 'static' : `dynamic · ${ruleLabel(playlist, groups)}`}</span>
+        <span className="dim" style={{ fontSize: 12 }}>{playlist.kind === 'static' ? 'static' : t('dynamic · {ruleLabel}', { ruleLabel: ruleLabel(playlist, groups) })}</span>
         <div className="grow" />
-        <button className="mini" onClick={onRename}>✎ Rename</button>
-        <button className="mini danger" onClick={onDelete}>🗑 Delete</button>
+        <button className="mini" onClick={onRename}>{t('✎ Rename')}</button>
+        <button className="mini danger" onClick={onDelete}>{t('🗑 Delete')}</button>
       </div>
       <div className="row" style={{ marginBottom: 8, gap: 10 }}>
-        <label style={{ margin: 0 }}><input type="radio" checked={playlist.kind === 'static'} onChange={() => set({ kind: 'static' })} style={{ width: 'auto', marginRight: 4 }} />Static (hand-picked)</label>
-        <label style={{ margin: 0 }}><input type="radio" checked={playlist.kind === 'dynamic'} onChange={() => set({ kind: 'dynamic' })} style={{ width: 'auto', marginRight: 4 }} />Dynamic (rule)</label>
+        <label style={{ margin: 0 }}><input type="radio" checked={playlist.kind === 'static'} onChange={() => set({ kind: 'static' })} style={{ width: 'auto', marginRight: 4 }} />{t('Static (hand-picked)')}</label>
+        <label style={{ margin: 0 }}><input type="radio" checked={playlist.kind === 'dynamic'} onChange={() => set({ kind: 'dynamic' })} style={{ width: 'auto', marginRight: 4 }} />{t('Dynamic (rule)')}</label>
         <div className="grow" />
-        <button className="primary" onClick={() => player.playQueue(tracks)} disabled={!tracks.length}>▶ Play all ({tracks.length})</button>
+        <button className="primary" onClick={() => player.playQueue(tracks)} disabled={!tracks.length}>{t('▶ Play all ({count})', { count: tracks.length })}</button>
       </div>
-      <p className="note">{tracks.length} song{tracks.length === 1 ? '' : 's'} · {fmtDuration(totalMs)}</p>
+      <p className="note">{t.n('{n} song', '{n} songs', tracks.length)} · {fmtDuration(totalMs)}</p>
 
       {playlist.kind === 'dynamic' ? (
         <div className="row" style={{ margin: '8px 0', gap: 8, flexWrap: 'wrap' }}>
-          <label style={{ margin: 0 }}>Rule:</label>
+          <label style={{ margin: 0 }}>{t('Rule:')}</label>
           <select value={rule.field} onChange={(e) => setRule({ field: e.target.value, value: '' })} style={{ width: 'auto' }}>
             {DYNAMIC_FIELDS.map((f) => <option key={f.field} value={f.field}>{f.label}</option>)}
           </select>
-          {rule.field === 'group' && <select value={rule.value || ''} onChange={(e) => setRule({ ...rule, value: e.target.value })} style={{ width: 'auto' }}><option value="">— pick —</option>{groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select>}
-          {rule.field === 'type' && <select value={rule.value || ''} onChange={(e) => setRule({ ...rule, value: e.target.value })} style={{ width: 'auto' }}><option value="">— pick —</option>{['music', 'dialog', 'upload'].map((x) => <option key={x} value={x}>{x}</option>)}</select>}
+          {rule.field === 'group' && <select value={rule.value || ''} onChange={(e) => setRule({ ...rule, value: e.target.value })} style={{ width: 'auto' }}><option value="">{t('— pick —')}</option>{groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select>}
+          {rule.field === 'type' && <select value={rule.value || ''} onChange={(e) => setRule({ ...rule, value: e.target.value })} style={{ width: 'auto' }}><option value="">{t('— pick —')}</option>{['music', 'dialog', 'upload'].map((x) => <option key={x} value={x}>{x}</option>)}</select>}
           {rule.field === 'rating' && <select value={rule.value || '4'} onChange={(e) => setRule({ ...rule, value: e.target.value })} style={{ width: 'auto' }}>{[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{'★'.repeat(n)}</option>)}</select>}
-          {(rule.field === 'genre' || rule.field === 'search') && <input value={rule.value || ''} onChange={(e) => setRule({ ...rule, value: e.target.value })} placeholder="text…" style={{ maxWidth: 220 }} />}
+          {(rule.field === 'genre' || rule.field === 'search') && <input value={rule.value || ''} onChange={(e) => setRule({ ...rule, value: e.target.value })} placeholder={t('text…')} style={{ maxWidth: 220 }} />}
         </div>
       ) : (
-        <div className="row" style={{ margin: '6px 0' }}><button onClick={() => setAdding((a) => !a)}>{adding ? 'Done adding' : '＋ Add tracks'}</button></div>
+        <div className="row" style={{ margin: '6px 0' }}><button onClick={() => setAdding((a) => !a)}>{adding ? t('Done adding') : t('＋ Add tracks')}</button></div>
       )}
 
       {adding && playlist.kind === 'static' && (
@@ -60,11 +61,11 @@ export default function PlaylistView({ playlist, projects, groups, onChange, onR
             if (!ready.length) return null;
             return (
               <div key={p.id} style={{ marginBottom: 4 }}>
-                <div className="dim" style={{ fontSize: 12, fontWeight: 600 }}>{p.title || 'Untitled'}</div>
+                <div className="dim" style={{ fontSize: 12, fontWeight: 600 }}>{p.title || t('Untitled')}</div>
                 {ready.map((tk) => (
                   <div key={tk.id} className="row" style={{ fontSize: 13, padding: '2px 0' }}>
                     <span className="grow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tk.title}</span>
-                    <button className="mini" onClick={() => addItem(p.id, tk.id)}>{inList(p.id, tk.id) ? '＋ again' : '＋'}</button>
+                    <button className="mini" onClick={() => addItem(p.id, tk.id)}>{inList(p.id, tk.id) ? t('＋ again') : '＋'}</button>
                   </div>
                 ))}
               </div>
@@ -81,7 +82,7 @@ export default function PlaylistView({ playlist, projects, groups, onChange, onR
             return (
               <div key={i} className="row" style={{ padding: '4px 0', fontSize: 13, borderBottom: '1px solid var(--line)' }}>
                 <span className="dim" style={{ width: 22 }}>{i + 1}</span>
-                <span className="grow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tk ? tk.title : <span style={{ color: 'var(--bad)' }}>(missing)</span>}<span className="dim"> · {p?.title || '?'}</span></span>
+                <span className="grow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tk ? tk.title : <span style={{ color: 'var(--bad)' }}>{t('(missing)')}</span>}<span className="dim"> · {p?.title || '?'}</span></span>
                 {tk?.clipId && <button className="mini" onClick={() => player.play(tk, tracks)}>{player.playing === tk.id ? (player.paused ? '▶' : '⏸') : '▶'}</button>}
                 <button className="mini" onClick={() => moveItem(i, -1)} disabled={i === 0}>▲</button>
                 <button className="mini" onClick={() => moveItem(i, 1)} disabled={i === (playlist.items.length - 1)}>▼</button>
@@ -96,10 +97,10 @@ export default function PlaylistView({ playlist, projects, groups, onChange, onR
               <span className="grow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tk.title}<span className="dim"> · {tk._album}</span></span>
               <span className="dim" style={{ fontSize: 12 }}>{fmtDuration(tk.durationMs)}</span>
               <button className="mini" onClick={() => player.play(tk, tracks)}>{player.playing === tk.id ? (player.paused ? '▶' : '⏸') : '▶'}</button>
-              <button className="mini" onClick={() => onOpenAlbum(tk._projectId)} title="Open album">›</button>
+              <button className="mini" onClick={() => onOpenAlbum(tk._projectId)} title={t('Open album')}>›</button>
             </div>
           ))}
-      {!tracks.length && playlist.kind === 'dynamic' && <p className="note">No songs match this rule yet.</p>}
+      {!tracks.length && playlist.kind === 'dynamic' && <p className="note">{t('No songs match this rule yet.')}</p>}
     </div>
   );
 }

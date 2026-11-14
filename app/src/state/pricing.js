@@ -1,3 +1,4 @@
+import { t, fmtNum, fmtDate } from '../i18n.js';
 // Rough cost estimates + aggregation for the spend dashboard. Prices are APPROXIMATE public list
 // rates and vary by plan — the dashboard labels figures "estimated". Pure; see pricing.test.mjs.
 
@@ -34,7 +35,10 @@ export function summarizeUsage(entries) {
   return s;
 }
 
-export const fmtUsd = (n) => (n >= 0.005 ? '$' + n.toFixed(2) : n > 0 ? '<$0.01' : '$0.00');
+// Money and counts in the reader's shared locale (font.js); plain English formatting in tests.
+const loc = () => (typeof window !== 'undefined' && window.appFont?.locale?.()) || 'en';
+const usd = (n) => { try { return new Intl.NumberFormat(loc(), { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n); } catch { return '$' + n.toFixed(2); } };
+export const fmtUsd = (n) => (n >= 0.005 ? usd(n) : n > 0 ? '<' + usd(0.01) : usd(0));
 export function fmtDuration(ms) {
   const s = Math.round((ms || 0) / 1000);
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
@@ -44,4 +48,6 @@ export function fmtDuration(ms) {
 // Credit-pool bar helpers (topbar 💲 Spend + dashboard).
 export const poolFrac = (c) => (c?.limit ? Math.min(1, c.used / c.limit) : 0);
 export const poolColor = (c) => { const f = c.used / c.limit; return f >= 0.9 ? 'var(--bad)' : f >= 0.75 ? 'var(--warn)' : 'var(--accent)'; };
-export const poolTitle = (c) => (c?.limit ? `ElevenLabs credits: ${c.used.toLocaleString()} of ${c.limit.toLocaleString()} used (${Math.round((c.used / c.limit) * 100)}%) · ${c.remaining.toLocaleString()} left${c.resetAt ? ` · resets ${new Date(c.resetAt).toLocaleDateString()}` : ''}${c.tier ? ` · ${c.tier}` : ''}` : 'Spend dashboard');
+export const poolTitle = (c) => (c?.limit ? t('ElevenLabs credits: {used} of {limit} used ({pct}%) · {left} left{reset}{tier}', {
+  used: fmtNum(c.used, 0), limit: fmtNum(c.limit, 0), pct: Math.round((c.used / c.limit) * 100), left: fmtNum(c.remaining, 0),
+  reset: c.resetAt ? t(' · resets {date}', { date: fmtDate(c.resetAt) }) : '', tier: c.tier ? ` · ${c.tier}` : '' }) : t('Spend dashboard'));

@@ -6,6 +6,7 @@ import AttachmentStrip from './AttachmentStrip.jsx';
 import { Stars, NotesPanel, hasNotes } from './Rating.jsx';
 import { groupRatings, albumRating } from '../album/taste.js';
 import { useState } from 'react';
+import { t } from '../i18n.js';
 
 // Read-only overview of a group: every album under it (recursively) with its songs, and a Play-all
 // across the whole group. No editing — click an album to open it in the editor.
@@ -25,24 +26,24 @@ export default function GroupView({ group, groups, projects, onOpenAlbum, onCopy
       <div className="row" style={{ marginBottom: 8 }}>
         <h2 style={{ fontSize: 20 }}>📁 {group.name}</h2>
         <Stars value={group.rating || 0} onChange={(v) => onChangeGroup({ rating: v })} calc={gr.calc} n={gr.n} size={16} />
-        <button className={`mini${hasNotes(group) ? ' primary' : ''}`} onClick={() => setNotes((v) => !v)} title="Group notes, likes and dislikes">📝</button>
+        <button className={`mini${hasNotes(group) ? ' primary' : ''}`} onClick={() => setNotes((v) => !v)} title={t('Group notes, likes and dislikes')}>📝</button>
         <div className="grow" />
-        <button className="mini" onClick={onAttachments} title="Liner notes, artwork or references for this whole set of albums">📎 Attachments{group.attachments?.length ? ` (${group.attachments.length})` : ''}…</button>
-        <button className="mini" onClick={onCopyPath} title="Open this group's folder in File Explorer (or copy its path)">📂 Open folder</button>
-        <button className="primary" onClick={() => player.playQueue(allReady)} disabled={!allReady.length}>▶ Play all ({allReady.length})</button>
+        <button className="mini" onClick={onAttachments} title={t('Liner notes, artwork or references for this whole set of albums')}>{t('📎 Attachments')}{group.attachments?.length ? ` (${group.attachments.length})` : ''}…</button>
+        <button className="mini" onClick={onCopyPath} title={t('Open this group\'s folder in File Explorer (or copy its path)')}>{t('📂 Open folder')}</button>
+        <button className="primary" onClick={() => player.playQueue(allReady)} disabled={!allReady.length}>{t('▶ Play all ({count})', { count: allReady.length })}</button>
       </div>
-      <p className="note">{albums.length} album{albums.length === 1 ? '' : 's'} · {allReady.length} song{allReady.length === 1 ? '' : 's'} · {fmtDuration(totalMs)}{gaps > 0 && <span style={{ color: 'var(--warn)' }}> · {gaps} gap{gaps === 1 ? '' : 's'}</span>} · read-only</p>
+      <p className="note">{t.n('{n} album', '{n} albums', albums.length)}{' '}{t.n('· {n} song', '· {n} songs', allReady.length)} · {fmtDuration(totalMs)}{gaps > 0 && <span style={{ color: 'var(--warn)' }}>{' '}{t.n('· {n} gap', '· {n} gaps', gaps)}</span>}{' '}{t('· read-only')}</p>
       {notes && <NotesPanel obj={group} what="group" onChange={onChangeGroup} />}
       <AttachmentStrip list={group.attachments} />
 
-      {!albums.length && <div className="empty">No albums in this group yet.</div>}
+      {!albums.length && <div className="empty">{t('No albums in this group yet.')}</div>}
       {albums.map((a) => (
         <div key={a.id} className="track">
           <div className="track-head">
-            <span className="grow" style={{ fontWeight: 600, cursor: 'pointer' }} onClick={() => onOpenAlbum(a.id)} title="Open album">🎵 {a.title || 'Untitled'}</span>
-            {(() => { const r = albumRating(a); return r.eff ? <span className="dim" style={{ fontSize: 12 }} title={r.mine ? 'your rating' : `from ${r.n} rated songs`}>{(Math.round(r.eff * 10) / 10)}★{r.mine ? '' : '*'}</span> : null; })()}
+            <span className="grow" style={{ fontWeight: 600, cursor: 'pointer' }} onClick={() => onOpenAlbum(a.id)} title={t('Open album')}>🎵 {a.title || t('Untitled')}</span>
+            {(() => { const r = albumRating(a); return r.eff ? <span className="dim" style={{ fontSize: 12 }} title={r.mine ? t('your rating') : t('from {n2} rated songs', { n2: r.n })}>{(Math.round(r.eff * 10) / 10)}★{r.mine ? '' : '*'}</span> : null; })()}
             <span className="dim" style={{ fontSize: 12 }}>{(a.tracks || []).filter((tk) => tk.clipId).length}/{(a.tracks || []).length}</span>
-            <button className="mini" onClick={() => onOpenAlbum(a.id)}>Open ›</button>
+            <button className="mini" onClick={() => onOpenAlbum(a.id)}>{t('Open ›')}</button>
           </div>
           {(a.tracks || []).map((tk) => (
             <div key={tk.id} className="row" style={{ padding: '3px 0', fontSize: 13 }}>
@@ -50,7 +51,7 @@ export default function GroupView({ group, groups, projects, onOpenAlbum, onCopy
               <span className="grow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tk.title || '(untitled)'}</span>
               {tk.clipId
                 ? <><span className="dim" style={{ fontSize: 12 }}>{fmtDuration(tk.durationMs)}</span><button className="mini" onClick={() => player.play(tk, allReady)}>{player.playing === tk.id ? (player.paused ? '▶' : '⏸') : '▶'}</button></>
-                : <span className="dim" style={{ fontSize: 12, color: 'var(--warn)' }}>gap</span>}
+                : <span className="dim" style={{ fontSize: 12, color: 'var(--warn)' }}>{t('gap')}</span>}
             </div>
           ))}
         </div>

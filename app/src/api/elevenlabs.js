@@ -3,6 +3,7 @@
 // Each successful call logs to the spend dashboard. Pattern from Tachyread's elevenLabs.js.
 import { recordUsage } from '../state/db.js';
 import { musicCost, ttsCost } from '../state/pricing.js';
+import { t } from '../i18n.js';
 
 const BASE = 'https://api.elevenlabs.io/v1';
 
@@ -12,9 +13,9 @@ const spent = () => globalThis.dispatchEvent?.(new Event('musicstudio:spent'));
 export function configured(key) { return !!(key && key.trim()); }
 
 export const MUSIC_MODELS = [
-  { id: 'music_v2_5', label: 'Music v2.5 — newest / best quality' },
-  { id: 'music_v2', label: 'Music v2' },
-  { id: 'music_v1', label: 'Music v1 — deprecated' },
+  { id: 'music_v2_5', label: t('Music v2.5 — newest / best quality') },
+  { id: 'music_v2', label: t('Music v2') },
+  { id: 'music_v1', label: t('Music v1 — deprecated') },
 ];
 // Tracks follow the newest model unless the human pinned one in the app (t.modelPinned). The stored
 // t.model of an unpinned track is history (whatever was current when it was made), never a choice —
@@ -27,10 +28,10 @@ export const newTrackModel = (prefs) => (prefs?.musicModel && prefs.musicModel !
 // Compose prompt limit, from ElevenLabs' OpenAPI spec (verified 2026-10-04).
 export const MUSIC_PROMPT_MAX = 4100;
 export const TTS_MODELS = [
-  { id: 'eleven_v3', label: 'Eleven v3 — most expressive' },
-  { id: 'eleven_multilingual_v2', label: 'Multilingual v2 — best quality' },
-  { id: 'eleven_turbo_v2_5', label: 'Turbo v2.5 — faster / cheaper' },
-  { id: 'eleven_flash_v2_5', label: 'Flash v2.5 — fastest / cheapest' },
+  { id: 'eleven_v3', label: t('Eleven v3 — most expressive') },
+  { id: 'eleven_multilingual_v2', label: t('Multilingual v2 — best quality') },
+  { id: 'eleven_turbo_v2_5', label: t('Turbo v2.5 — faster / cheaper') },
+  { id: 'eleven_flash_v2_5', label: t('Flash v2.5 — fastest / cheapest') },
 ];
 
 async function errorFrom(r) {

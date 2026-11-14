@@ -1,15 +1,16 @@
+import { t } from '../i18n.js';
 // Playlist resolution — pure. A STATIC playlist is a curated ordered list of (projectId, trackId)
 // references; a DYNAMIC playlist is a rule evaluated over all albums at play time. Both resolve to
 // ordered, playable track objects. See ../audio/wav.test.mjs.
 
 export const DYNAMIC_FIELDS = [
-  { field: 'all', label: 'All songs' },
-  { field: 'favorites', label: 'Favorites (★)' },
-  { field: 'group', label: 'In group' },                 // value = groupId
-  { field: 'type', label: 'Track type' },                // value = 'music' | 'dialog' | 'upload'
-  { field: 'genre', label: "Album genre contains" },     // value = text
-  { field: 'search', label: 'Title / prompt contains' }, // value = text
-  { field: 'rating', label: 'Rated at least' },          // value = 1..5 stars
+  { field: 'all', label: t('All songs') },
+  { field: 'favorites', label: t('Favorites (★)') },
+  { field: 'group', label: t('In group') },                 // value = groupId
+  { field: 'type', label: t('Track type') },                // value = 'music' | 'dialog' | 'upload'
+  { field: 'genre', label: t('Album genre contains') },     // value = text
+  { field: 'search', label: t('Title / prompt contains') }, // value = text
+  { field: 'rating', label: t('Rated at least') },          // value = 1..5 stars
 ];
 
 function descendantGroupIds(gid, groups) {

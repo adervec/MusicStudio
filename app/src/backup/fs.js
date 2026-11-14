@@ -1,3 +1,4 @@
+import { t } from '../i18n.js';
 // Local backup folder via the File System Access API (Chrome/Edge, secure context). The user picks a
 // real folder once; the handle is persisted in IndexedDB and reused to auto-write every clip the
 // studio creates, plus the album export. No data leaves the device. Graceful download fallback.
@@ -5,7 +6,7 @@
 export function dirPickerSupported() { return typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function'; }
 
 export async function pickBackupDir() {
-  if (!dirPickerSupported()) throw new Error('This browser has no folder access — use Chrome or Edge.');
+  if (!dirPickerSupported()) throw new Error(t('This browser has no folder access — use Chrome or Edge.'));
   return await window.showDirectoryPicker({ mode: 'readwrite', id: 'musicstudio-backup' });
 }
 

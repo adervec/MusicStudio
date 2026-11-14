@@ -1,3 +1,4 @@
+import { t } from '../i18n.js';
 // Google Drive sync channel — the SMALL JSON side of the pipeline (catalog + requests), stored in
 // Drive's private appDataFolder. The actual audio never goes through here: it reaches the phone via
 // the local publish folder + your desktop Drive/AutoSync client. This channel only carries
@@ -36,7 +37,7 @@ function loadGis() {
     s.src = 'https://accounts.google.com/gsi/client';
     s.async = true;
     s.onload = () => resolve();
-    s.onerror = () => reject(new Error('Could not load Google sign-in.'));
+    s.onerror = () => reject(new Error(t('Could not load Google sign-in.')));
     document.head.appendChild(s);
   });
   return gisLoaded;
@@ -63,10 +64,10 @@ function requestToken(clientId, prompt = '') {
       client_id: clientId, scope: SCOPE,
       callback: (resp) => {
         if (resp?.access_token) { _token = { value: resp.access_token, exp: Date.now() + ((resp.expires_in || 3600) * 1000) }; resolve(resp.access_token); }
-        else reject(new Error(resp?.error || 'Sign-in failed.'));
+        else reject(new Error(resp?.error || t('Sign-in failed.')));
       },
       // Without this a dismissed/blocked popup would hang the promise forever.
-      error_callback: (err) => reject(new Error(err?.message || err?.type || 'Sign-in was dismissed.')),
+      error_callback: (err) => reject(new Error(err?.message || err?.type || t('Sign-in was dismissed.'))),
     });
     client.requestAccessToken({ prompt });
   });
@@ -75,7 +76,7 @@ function requestToken(clientId, prompt = '') {
 // `silent` (boot / background poll) only reuses an existing grant — it never opens a popup.
 export async function driveConnect(cfg, { silent = false } = {}) {
   const clientId = driveClientId(cfg);
-  if (!clientId) throw new Error('Google Drive sync isn’t enabled on this deployment — add your own OAuth client ID in Settings.');
+  if (!clientId) throw new Error(t('Google Drive sync isn’t enabled on this deployment — add your own OAuth client ID in Settings.'));
   if (tokenValid()) { if (!_profile) await fetchProfile(_token.value); return _token.value; }
   await loadGis();
   let token;
@@ -89,7 +90,7 @@ export function driveDisconnect() { _token = null; _profile = null; window.appFo
 async function findFile(name) {
   const q = encodeURIComponent(`name='${name}' and trashed=false`);
   const r = await fetch(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=${q}&fields=files(id,name,modifiedTime)`, { headers: { Authorization: `Bearer ${_token.value}` } });
-  if (!r.ok) throw new Error(`Drive list failed (${r.status}).`);
+  if (!r.ok) throw new Error(t('Drive list failed ({status}).', { status: r.status }));
   return (await r.json()).files?.[0] || null;
 }
 
@@ -107,11 +108,11 @@ export async function driveUploadJson(name, obj) {
       headers: { Authorization: `Bearer ${_token.value}`, 'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Type': 'application/json' },
       body: JSON.stringify(meta),
     });
-    if (!init.ok) throw new Error(`Drive upload init failed (${init.status}).`);
+    if (!init.ok) throw new Error(t('Drive upload init failed ({status}).', { status: init.status }));
     const session = init.headers.get('Location');
-    if (!session) throw new Error('Drive upload init returned no session URL.');
+    if (!session) throw new Error(t('Drive upload init returned no session URL.'));
     const put = await fetch(session, { method: 'PUT', body: blob });
-    if (!put.ok) throw new Error(`Drive upload failed (${put.status}).`);
+    if (!put.ok) throw new Error(t('Drive upload failed ({status}).', { status: put.status }));
     return blob.size;
   }
   const form = new FormData();
@@ -121,7 +122,7 @@ export async function driveUploadJson(name, obj) {
     ? `https://www.googleapis.com/upload/drive/v3/files/${existing}?uploadType=multipart`
     : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
   const r = await fetch(url, { method: existing ? 'PATCH' : 'POST', headers: { Authorization: `Bearer ${_token.value}` }, body: form });
-  if (!r.ok) throw new Error(`Drive upload failed (${r.status}).`);
+  if (!r.ok) throw new Error(t('Drive upload failed ({status}).', { status: r.status }));
   return blob.size;
 }
 
@@ -131,7 +132,7 @@ export async function driveDownloadJson(name) {
   const r = await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`, { headers: { Authorization: `Bearer ${_token.value}` } });
   if (!r.ok) return null;
   try { return JSON.parse(await r.text()); }
-  catch { throw new Error(`The ${name} sync file is corrupt — re-push it from the desktop.`); }
+  catch { throw new Error(t('The {name} sync file is corrupt — re-push it from the desktop.', { name: name })); }
 }
 
 // Cheap change probe: one metadata query, no body. null = file doesn't exist yet.

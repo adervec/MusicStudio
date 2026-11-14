@@ -2,6 +2,7 @@
 // audio clip blobs, the API-spend log, the local backup-folder handle, and settings (API key + prefs).
 // Everything lives on-device. Pattern mirrors Tachyread's storage layer.
 import { openDB } from 'idb';
+import { t } from '../i18n.js';
 
 const DB_NAME = 'MusicStudio';
 const DB_VERSION = 4;
@@ -145,7 +146,7 @@ export async function exportAllData() {
   return out;
 }
 export async function importAllData(bundle, { replace = true } = {}) {
-  if (!bundle || bundle.app !== 'musicstudio' || !bundle.stores) throw new Error('Not a Music Studio backup file.');
+  if (!bundle || bundle.app !== 'musicstudio' || !bundle.stores) throw new Error(t('Not a Music Studio backup file.'));
   const db = await getDB();
   for (const [name, inline] of BACKUP_STORES) {
     const s = bundle.stores[name]; if (!s || !db.objectStoreNames.contains(name)) continue;

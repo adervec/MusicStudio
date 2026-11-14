@@ -5,15 +5,16 @@ import { Stars } from './Rating.jsx';
 import { groupFolderPath } from '../album/skeleton.js';
 import { fmtDuration, fmtUsd } from '../state/pricing.js';
 import { download } from '../backup/fs.js';
+import { t } from '../i18n.js';
 
 const COLS = [
-  { key: 'rating', label: 'Rating' }, { key: 'fav', label: '♥' }, { key: 'title', label: 'Title' }, { key: 'album', label: 'Album' }, { key: 'group', label: 'Group' },
-  { key: 'n', label: '#' }, { key: 'type', label: 'Type' }, { key: 'status', label: 'Status' }, { key: 'ms', label: 'Length' },
-  { key: 'qc', label: 'QC' }, { key: 'takes', label: 'Takes' }, { key: 'genre', label: 'Genre' }, { key: 'year', label: 'Year' }, { key: 'url', label: '🔗' }, { key: 'prompt', label: 'Prompt' }, { key: 'notes', label: 'Notes' },
+  { key: 'rating', label: t('Rating') }, { key: 'fav', label: '♥' }, { key: 'title', label: t('Title') }, { key: 'album', label: t('Album') }, { key: 'group', label: t('Group') },
+  { key: 'n', label: '#' }, { key: 'type', label: t('Type') }, { key: 'status', label: t('Status') }, { key: 'ms', label: t('Length') },
+  { key: 'qc', label: t('QC') }, { key: 'takes', label: t('Takes') }, { key: 'genre', label: t('Genre') }, { key: 'year', label: t('Year') }, { key: 'url', label: '🔗' }, { key: 'prompt', label: t('Prompt') }, { key: 'notes', label: t('Notes') },
 ];
 const BREAKDOWNS = [
-  { label: 'By group', fn: (r) => r.group.split('/')[0] }, { label: 'By genre', fn: (r) => r.genre },
-  { label: 'By year', fn: (r) => String(r.year || '') }, { label: 'By type', fn: (r) => r.type },
+  { label: t('By group'), fn: (r) => r.group.split('/')[0] }, { label: t('By genre'), fn: (r) => r.genre },
+  { label: t('By year'), fn: (r) => String(r.year || '') }, { label: t('By type'), fn: (r) => r.type },
 ];
 const MAX_ROWS = 1000; // ponytail: plain table, capped — virtualize if libraries outgrow it
 
@@ -42,32 +43,32 @@ export default function Library({ projects, groups, onOpenAlbum, onRate, onGener
   return (
     <div>
       <div className="row" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
-        <h2 style={{ fontSize: 20 }}>📊 Library</h2>
+        <h2 style={{ fontSize: 20 }}>{t('📊 Library')}</h2>
         <div className="grow" />
-        <button className="mini" onClick={() => setShowStats((v) => !v)}>{showStats ? 'Hide stats' : 'Show stats'}</button>
-        <button className="mini" onClick={() => download(new Blob([toCsv(rows, ['album', 'group', 'n', 'title', 'type', 'status', 'ms', 'rating', 'fav', 'qc', 'takes', 'seed', 'genre', 'year', 'artist', 'url', 'prompt', 'notes'])], { type: 'text/csv' }), 'musicstudio-library.csv')} disabled={!rows.length}>⤓ CSV</button>
-        <button className="mini" onClick={() => download(new Blob([JSON.stringify(logbook(projects, groups), null, 2)], { type: 'application/json' }), `musicstudio-logbook-${new Date().toISOString().slice(0, 10)}.json`)} title="Everything about every track — prompts, plans, lyrics, seeds, models, quality, takes, files, ratings, notes">⤓ Logbook</button>
-        <button className="primary" onClick={() => player.playQueue(ready)} disabled={!ready.length}>▶ Play {filtered ? 'filtered' : 'all'} ({ready.length})</button>
+        <button className="mini" onClick={() => setShowStats((v) => !v)}>{showStats ? t('Hide stats') : t('Show stats')}</button>
+        <button className="mini" onClick={() => download(new Blob([toCsv(rows, ['album', 'group', 'n', 'title', 'type', 'status', 'ms', 'rating', 'fav', 'qc', 'takes', 'seed', 'genre', 'year', 'artist', 'url', 'prompt', 'notes'])], { type: 'text/csv' }), 'musicstudio-library.csv')} disabled={!rows.length}>{t('⤓ CSV')}</button>
+        <button className="mini" onClick={() => download(new Blob([JSON.stringify(logbook(projects, groups), null, 2)], { type: 'application/json' }), `musicstudio-logbook-${new Date().toISOString().slice(0, 10)}.json`)} title={t('Everything about every track — prompts, plans, lyrics, seeds, models, quality, takes, files, ratings, notes')}>{t('⤓ Logbook')}</button>
+        <button className="primary" onClick={() => player.playQueue(ready)} disabled={!ready.length}>{t('▶ Play')}{' '}{filtered ? 'filtered' : 'all'} ({ready.length})</button>
       </div>
 
       <div className="lib-filters">
-        <input value={f.q} onChange={set('q')} placeholder="Search titles, albums, prompts, genres, links…" style={{ flex: 3 }} />
-        <select value={f.group} onChange={set('group')}><option value="">All groups</option>{groupOpts.map((g) => <option key={g} value={g}>{g}</option>)}</select>
-        <select value={f.type} onChange={set('type')}><option value="">All types</option><option value="music">Song</option><option value="dialog">Dialog</option><option value="upload">Upload</option><option value="sfx">Sound effect</option></select>
-        <select value={f.status} onChange={set('status')}><option value="">Any status</option><option value="ready">Ready</option><option value="gap">Gap (to generate)</option><option value="empty">Empty</option></select>
-        <label className="row" style={{ margin: 0, whiteSpace: 'nowrap' }}><input type="checkbox" style={{ width: 'auto' }} checked={f.fav} onChange={set('fav')} /> ★ only</label>
-        <select value={f.minRating} onChange={set('minRating')} style={{ maxWidth: 130 }}><option value={0}>Any rating</option>{[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{'★'.repeat(n)}{n < 5 ? ' or more' : ''}</option>)}</select>
-        {filtered && <button className="mini" onClick={() => setF(NOF)}>Clear</button>}
+        <input value={f.q} onChange={set('q')} placeholder={t('Search titles, albums, prompts, genres, links…')} style={{ flex: 3 }} />
+        <select value={f.group} onChange={set('group')}><option value="">{t('All groups')}</option>{groupOpts.map((g) => <option key={g} value={g}>{g}</option>)}</select>
+        <select value={f.type} onChange={set('type')}><option value="">{t('All types')}</option><option value="music">{t('Song')}</option><option value="dialog">{t('Dialog')}</option><option value="upload">{t('Upload')}</option><option value="sfx">{t('Sound effect')}</option></select>
+        <select value={f.status} onChange={set('status')}><option value="">{t('Any status')}</option><option value="ready">{t('Ready')}</option><option value="gap">{t('Gap (to generate)')}</option><option value="empty">{t('Empty')}</option></select>
+        <label className="row" style={{ margin: 0, whiteSpace: 'nowrap' }}><input type="checkbox" style={{ width: 'auto' }} checked={f.fav} onChange={set('fav')} />{' '}{t('★ only')}</label>
+        <select value={f.minRating} onChange={set('minRating')} style={{ maxWidth: 130 }}><option value={0}>{t('Any rating')}</option>{[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{'★'.repeat(n)}{n < 5 ? t(' or more') : ''}</option>)}</select>
+        {filtered && <button className="mini" onClick={() => setF(NOF)}>{t('Clear')}</button>}
       </div>
 
       {showStats && (
         <>
           <div className="cards">
-            <div className="card"><div className="dim">Albums</div><div className="big">{s.albums}</div></div>
-            <div className="card"><div className="dim">Songs ready</div><div className="big">{s.ready}<span className="dim" style={{ fontSize: 14 }}> / {s.tracks}</span></div></div>
-            <div className="card"><div className="dim">Listening time</div><div className="big">{fmtDuration(s.ms)}</div></div>
-            <div className="card"><div className="dim">Gaps</div><div className="big" style={{ color: s.gaps ? 'var(--warn)' : undefined }}>{s.gaps}</div><div className="dim" style={{ fontSize: 11 }}>≈ {fmtUsd(s.gapCost)} to generate</div></div>
-            <div className="card"><div className="dim">Favorites</div><div className="big">{s.favs}</div></div>
+            <div className="card"><div className="dim">{t('Albums')}</div><div className="big">{s.albums}</div></div>
+            <div className="card"><div className="dim">{t('Songs ready')}</div><div className="big">{s.ready}<span className="dim" style={{ fontSize: 14 }}> / {s.tracks}</span></div></div>
+            <div className="card"><div className="dim">{t('Listening time')}</div><div className="big">{fmtDuration(s.ms)}</div></div>
+            <div className="card"><div className="dim">{t('Gaps')}</div><div className="big" style={{ color: s.gaps ? 'var(--warn)' : undefined }}>{s.gaps}</div><div className="dim" style={{ fontSize: 11 }}>{t('≈ {usd} to generate', { usd: fmtUsd(s.gapCost) })}</div></div>
+            <div className="card"><div className="dim">{t('Favorites')}</div><div className="big">{s.favs}</div></div>
           </div>
           <div className="lib-breakdowns">
             {BREAKDOWNS.map(({ label, fn }) => {
@@ -77,7 +78,7 @@ export default function Library({ projects, groups, onOpenAlbum, onRate, onGener
                   <div className="dim" style={{ marginBottom: 6 }}>{label}</div>
                   <div className="days">
                     {b.map((x) => (
-                      <div key={x.k} className="day" title={`${x.ready}/${x.n} ready · ${fmtDuration(x.ms)}`}>
+                      <div key={x.k} className="day" title={t('{ready}/{n} ready · {duration}', { ready: x.ready, n: x.n, duration: fmtDuration(x.ms) })}>
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{x.k}</span>
                         <div className="bar"><div style={{ width: `${((x.ms || x.n) / max) * 100}%` }} /></div>
                         <span className="cost">{x.ms ? fmtDuration(x.ms) : `${x.n} trk`}</span>
@@ -94,20 +95,20 @@ export default function Library({ projects, groups, onOpenAlbum, onRate, onGener
 
       {sel.size > 0 && (
         <div className="bulk-bar">
-          <b>{sel.size} selected</b>
-          <button className="mini" onClick={() => player.playQueue(chosen.filter((r) => r.status === 'ready').map((r) => r.track))}>▶ Play</button>
-          <button className="mini" onClick={() => player.enqueue(chosen.filter((r) => r.status === 'ready').map((r) => r.track))}>＋♫ Queue</button>
-          <button className="mini" disabled={!chosen.some((r) => r.status === 'gap')} onClick={() => onGenerate(byAlbum(chosen.filter((r) => r.status === 'gap')))}>⚡ Generate gaps ({chosen.filter((r) => r.status === 'gap').length})</button>
-          <select value="" onChange={(e) => { if (e.target.value !== '') onRate(byAlbum(chosen), +e.target.value); }} style={{ width: 'auto' }}><option value="">★ Rate…</option>{[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{'★'.repeat(n)}</option>)}<option value="0">clear rating</option></select>
-          {playlists.some((p) => p.kind === 'static') && <select value="" onChange={(e) => { if (e.target.value) onAddToPlaylist(chosen.map((r) => ({ projectId: r.albumId, trackId: r.id })), e.target.value); }} style={{ width: 'auto' }}><option value="">＋ Playlist…</option>{playlists.filter((p) => p.kind === 'static').map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>}
+          <b>{t('{size} selected', { size: sel.size })}</b>
+          <button className="mini" onClick={() => player.playQueue(chosen.filter((r) => r.status === 'ready').map((r) => r.track))}>{t('▶ Play')}</button>
+          <button className="mini" onClick={() => player.enqueue(chosen.filter((r) => r.status === 'ready').map((r) => r.track))}>{t('＋♫ Queue')}</button>
+          <button className="mini" disabled={!chosen.some((r) => r.status === 'gap')} onClick={() => onGenerate(byAlbum(chosen.filter((r) => r.status === 'gap')))}>{t('⚡ Generate gaps ({count})', { count: chosen.filter((r) => r.status === 'gap').length })}</button>
+          <select value="" onChange={(e) => { if (e.target.value !== '') onRate(byAlbum(chosen), +e.target.value); }} style={{ width: 'auto' }}><option value="">{t('★ Rate…')}</option>{[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{'★'.repeat(n)}</option>)}<option value="0">{t('clear rating')}</option></select>
+          {playlists.some((p) => p.kind === 'static') && <select value="" onChange={(e) => { if (e.target.value) onAddToPlaylist(chosen.map((r) => ({ projectId: r.albumId, trackId: r.id })), e.target.value); }} style={{ width: 'auto' }}><option value="">{t('＋ Playlist…')}</option>{playlists.filter((p) => p.kind === 'static').map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>}
           <div className="grow" />
-          <button className="mini" onClick={() => setSel(new Set())}>Clear selection</button>
+          <button className="mini" onClick={() => setSel(new Set())}>{t('Clear selection')}</button>
         </div>
       )}
       <div className="lib-table">
         <table>
           <thead><tr>
-            <th><input type="checkbox" style={{ width: 'auto' }} title="Select all shown" checked={!!rows.length && rows.slice(0, MAX_ROWS).every((r) => sel.has(key(r)))} onChange={(e) => setSel(e.target.checked ? new Set(rows.slice(0, MAX_ROWS).map(key)) : new Set())} /></th>
+            <th><input type="checkbox" style={{ width: 'auto' }} title={t('Select all shown')} checked={!!rows.length && rows.slice(0, MAX_ROWS).every((r) => sel.has(key(r)))} onChange={(e) => setSel(e.target.checked ? new Set(rows.slice(0, MAX_ROWS).map(key)) : new Set())} /></th>
             <th />
             {COLS.map((c) => <th key={c.key} onClick={() => by(c.key)} style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>{c.label}{sort.key === c.key ? (sort.dir > 0 ? ' ▲' : ' ▼') : ''}</th>)}
           </tr></thead>
@@ -115,10 +116,10 @@ export default function Library({ projects, groups, onOpenAlbum, onRate, onGener
             {rows.slice(0, MAX_ROWS).map((r, i) => (
               <tr key={r.albumId + r.id} className={`${player.playing === r.id ? 'playing' : ''}${sel.has(key(r)) ? ' sel' : ''}`}>
                 <td><input type="checkbox" style={{ width: 'auto' }} checked={sel.has(key(r))} onClick={(e) => pick(i, e)} onChange={() => {}} /></td>
-                <td style={{ whiteSpace: 'nowrap' }}>{r.status === 'ready' && <button className="mini" onClick={() => player.enqueue([r.track])} title="Add to the end of the play queue">＋</button>}{r.status === 'ready' && <button className="mini" onClick={() => player.play(r.track, ready)}>{player.playing === r.id && !player.paused ? '⏸' : '▶'}</button>}</td>
+                <td style={{ whiteSpace: 'nowrap' }}>{r.status === 'ready' && <button className="mini" onClick={() => player.enqueue([r.track])} title={t('Add to the end of the play queue')}>＋</button>}{r.status === 'ready' && <button className="mini" onClick={() => player.play(r.track, ready)}>{player.playing === r.id && !player.paused ? '⏸' : '▶'}</button>}</td>
                 <td><Stars value={r.rating} onChange={(v) => onRate([{ projectId: r.albumId, trackIds: [r.id] }], v)} size={12} /></td>
                 <td style={{ color: 'var(--bad)' }}>{r.fav ? '♥' : ''}</td>
-                <td>{r.title || <span className="dim">(untitled)</span>}</td>
+                <td>{r.title || <span className="dim">{t('(untitled)')}</span>}</td>
                 <td><a href="#" onClick={(e) => { e.preventDefault(); onOpenAlbum(r.albumId); }}>{r.album}</a></td>
                 <td className="dim">{r.group}</td>
                 <td className="dim">{r.n}</td>
@@ -136,8 +137,8 @@ export default function Library({ projects, groups, onOpenAlbum, onRate, onGener
             ))}
           </tbody>
         </table>
-        {!rows.length && <div className="empty">{all.length ? 'Nothing matches these filters.' : 'No tracks in the library yet.'}</div>}
-        {rows.length > MAX_ROWS && <p className="note">Showing the first {MAX_ROWS} of {rows.length} — narrow the filter to see the rest (CSV has them all).</p>}
+        {!rows.length && <div className="empty">{all.length ? t('Nothing matches these filters.') : t('No tracks in the library yet.')}</div>}
+        {rows.length > MAX_ROWS && <p className="note">{t('Showing the first {MAX_ROWS} of {count} — narrow the filter to see the rest (CSV has them all).', { MAX_ROWS: MAX_ROWS, count: rows.length })}</p>}
       </div>
     </div>
   );

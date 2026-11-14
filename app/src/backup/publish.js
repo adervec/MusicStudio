@@ -5,6 +5,7 @@ import { getClip } from '../state/db.js';
 import { decodeBlob, bufferToStereo, applyEdits, encodeWav, buildM3u, trackFileName, sanitizeFilename, retagBytes } from '../audio/wav.js';
 import { trackTags } from '../album/skeleton.js';
 import { writeToDir, ensureWritable, listFiles, removeFromDir } from './fs.js';
+import { t } from '../i18n.js';
 
 const extFromName = (n) => n?.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase();
 const editsOf = (tk) => ({ trimStartMs: tk.trimStartMs || 0, trimEndMs: tk.trimEndMs || 0, fadeInMs: tk.fadeInMs || 0, fadeOutMs: tk.fadeOutMs || 0, gain: tk.gain ?? 1 });
@@ -72,7 +73,7 @@ export async function renderTrackFile(project, tk, i, n, picture) {
 export async function publishAlbum(project, dir, onProgress = () => {}) {
   const ready = (project.tracks || []).filter((tk) => tk.clipId);
   if (!ready.length) return 0;
-  if (!(await ensureWritable(dir))) throw new Error('Publish folder permission denied.');
+  if (!(await ensureWritable(dir))) throw new Error(t('Publish folder permission denied.'));
   const album = project.title || 'Album';
   const folder = sanitizeFilename(album);
   const picture = await coverPicture(project);

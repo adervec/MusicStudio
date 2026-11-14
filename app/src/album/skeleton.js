@@ -4,6 +4,7 @@
 // no browser; see ../audio/wav.test.mjs.
 import { sanitizeFilename } from '../audio/wav.js';
 import { toChunks } from '../api/music.js';
+import { t } from '../i18n.js';
 
 const rid = () => 't_' + Math.random().toString(36).slice(2, 9);
 
@@ -26,26 +27,26 @@ export function albumFolderPath(project, groups = []) {
 
 // Every album-level metadata field the UI offers and album.json carries. One source of truth.
 export const ALBUM_META_FIELDS = [
-  { key: 'albumArtist', label: 'Album artist' },
-  { key: 'genre', label: 'Genre' },
-  { key: 'year', label: 'Year', type: 'number' },
-  { key: 'date', label: 'Release date (YYYY-MM-DD)' },
-  { key: 'composer', label: 'Composer' },
-  { key: 'producer', label: 'Producer' },
-  { key: 'publisher', label: 'Publisher / label' },
-  { key: 'copyright', label: 'Copyright' },
-  { key: 'language', label: 'Language' },
-  { key: 'mood', label: 'Mood' },
-  { key: 'bpm', label: 'BPM', type: 'number' },
-  { key: 'grouping', label: 'Grouping / content group' },
-  { key: 'discNumber', label: 'Disc number', type: 'number' },
-  { key: 'discTotal', label: 'Total discs', type: 'number' },
-  { key: 'catalogNumber', label: 'Catalog number' },
-  { key: 'upc', label: 'UPC / barcode' },
-  { key: 'isrc', label: 'ISRC' },
-  { key: 'website', label: 'Website / URL' },
-  { key: 'comment', label: 'Comment', type: 'textarea' },
-  { key: 'compilation', label: 'Compilation', type: 'checkbox' },
+  { key: 'albumArtist', label: t('Album artist') },
+  { key: 'genre', label: t('Genre') },
+  { key: 'year', label: t('Year'), type: 'number' },
+  { key: 'date', label: t('Release date (YYYY-MM-DD)') },
+  { key: 'composer', label: t('Composer') },
+  { key: 'producer', label: t('Producer') },
+  { key: 'publisher', label: t('Publisher / label') },
+  { key: 'copyright', label: t('Copyright') },
+  { key: 'language', label: t('Language') },
+  { key: 'mood', label: t('Mood') },
+  { key: 'bpm', label: t('BPM'), type: 'number' },
+  { key: 'grouping', label: t('Grouping / content group') },
+  { key: 'discNumber', label: t('Disc number'), type: 'number' },
+  { key: 'discTotal', label: t('Total discs'), type: 'number' },
+  { key: 'catalogNumber', label: t('Catalog number') },
+  { key: 'upc', label: t('UPC / barcode') },
+  { key: 'isrc', label: t('ISRC') },
+  { key: 'website', label: t('Website / URL') },
+  { key: 'comment', label: t('Comment'), type: 'textarea' },
+  { key: 'compilation', label: t('Compilation'), type: 'checkbox' },
 ];
 
 export function defaultMeta() {
@@ -92,7 +93,7 @@ export function buildAlbumJson(project) {
 
 // Merge an agent-edited album.json back into a project, preserving already-generated audio by track id.
 export function mergeSkeleton(project, json) {
-  if (!json || !Array.isArray(json.tracks)) throw new Error('album.json has no tracks[] array');
+  if (!json || !Array.isArray(json.tracks)) throw new Error(t('album.json has no tracks[] array'));
   const prevById = new Map((project.tracks || []).map((tk) => [tk.id, tk]));
   const tracks = json.tracks.map((j) => {
     const prev = prevById.get(j.id) || {};

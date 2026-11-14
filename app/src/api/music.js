@@ -4,15 +4,16 @@
 // Browser-direct with the user's key, like ./elevenlabs.js. Shapes per the OpenAPI spec (2026-11-07).
 import { recordUsage } from '../state/db.js';
 import { musicCost } from '../state/pricing.js';
+import { t } from '../i18n.js';
 
 const BASE = 'https://api.elevenlabs.io/v1';
 const spent = () => globalThis.dispatchEvent?.(new Event('musicstudio:spent'));
 const hdr = (apiKey, json = true) => ({ 'xi-api-key': (apiKey || '').trim(), ...(json ? { 'Content-Type': 'application/json' } : {}) });
 async function fail(r) {
-  if (r.status === 401) return new Error('Invalid ElevenLabs API key (or it lacks access to this feature).');
-  if (r.status === 429) return new Error('ElevenLabs rate limit / quota reached.');
-  try { const e = await r.json(); const d = e?.detail; return new Error(d?.message || (typeof d === 'string' ? d : Array.isArray(d) ? d.map((x) => x.msg).join('; ') : `ElevenLabs error ${r.status}`)); }
-  catch { return new Error(`ElevenLabs error ${r.status}`); }
+  if (r.status === 401) return new Error(t('Invalid ElevenLabs API key (or it lacks access to this feature).'));
+  if (r.status === 429) return new Error(t('ElevenLabs rate limit / quota reached.'));
+  try { const e = await r.json(); const d = e?.detail; return new Error(d?.message || (typeof d === 'string' ? d : Array.isArray(d) ? d.map((x) => x.msg).join('; ') : t('ElevenLabs error {status}', { status: r.status }))); }
+  catch { return new Error(t('ElevenLabs error {status}', { status: r.status })); }
 }
 
 // ── Pure helpers (tested in ../audio/wav.test.mjs) ────────────────────────────────────────────
@@ -46,11 +47,11 @@ export function parseMultipart(bytes, boundary) {
 export async function unzip(bytes) {
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let eocd = -1; for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
-  if (eocd < 0) throw new Error('Not a zip file');
+  if (eocd < 0) throw new Error(t('Not a zip file'));
   const count = dv.getUint16(eocd + 10, true); let p = dv.getUint32(eocd + 16, true);
   const out = [], dec = new TextDecoder();
   for (let n = 0; n < count; n++) {
-    if (dv.getUint32(p, true) !== 0x02014b50) throw new Error('Bad zip directory');
+    if (dv.getUint32(p, true) !== 0x02014b50) throw new Error(t('Bad zip directory'));
     const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
     const nameLen = dv.getUint16(p + 28, true), extraLen = dv.getUint16(p + 30, true), commentLen = dv.getUint16(p + 32, true);
     const local = dv.getUint32(p + 42, true);
@@ -62,7 +63,7 @@ export async function unzip(bytes) {
     let data;
     if (method === 0) data = raw.slice();
     else if (method === 8) data = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
-    else throw new Error(`Unsupported zip compression (${method})`);
+    else throw new Error(t('Unsupported zip compression ({method})', { method: method }));
     out.push({ name, bytes: data });
   }
   return out;
@@ -74,7 +75,7 @@ export function composeBody(tk, { model, seed, phonetic = false, c2pa = false, f
   const usePlan = plan || (tk.usePlan && tk.plan?.chunks?.length ? tk.plan : null);
   const body = { model_id: model, force_instrumental: !!tk.instrumental, use_phonetic_names: !!phonetic, sign_with_c2pa: !!c2pa, store_for_inpainting: !!storeForInpainting, with_timestamps: !!withTimestamps };
   if (usePlan) {
-    if (model === 'music_v1') throw new Error('Composition plans need Music v2 or newer — unpin Music v1 for this track.');
+    if (model === 'music_v1') throw new Error(t('Composition plans need Music v2 or newer — unpin Music v1 for this track.'));
     body.composition_plan = { chunks: usePlan.chunks.map(cleanChunk) };
     body.respect_sections_durations = tk.respectDurations !== false;
   } else {
@@ -122,7 +123,7 @@ export function toChunks(plan) {
 export function inpaintPlan(songId, durMs, fromMs, toMs, chunk) {
   let a = Math.max(0, Math.round(fromMs)), b = Math.min(Math.round(durMs), Math.round(toMs));
   if (a < 3000) a = 0; if (durMs - b < 3000) b = Math.round(durMs);
-  if (b - a < 3000) throw new Error('The part to regenerate must be at least 3 seconds.');
+  if (b - a < 3000) throw new Error(t('The part to regenerate must be at least 3 seconds.'));
   const chunks = [];
   if (a > 0) chunks.push({ song_id: songId, range: { start_ms: 0, end_ms: a } });
   chunks.push({ ...chunk, duration_ms: Math.min(120000, b - a) });
@@ -165,7 +166,7 @@ export async function composeDetailed(body, apiKey) {
       else if (pct.startsWith('audio/') || part.headers['content-disposition']) { audio = part.body; audioType = pct.startsWith('audio/') ? pct : audioType; }
     }
   } else audio = bytes; // plain audio (older behaviour)
-  if (!audio?.length) throw new Error('ElevenLabs returned no audio.');
+  if (!audio?.length) throw new Error(t('ElevenLabs returned no audio.'));
   const ms = body.composition_plan ? body.composition_plan.chunks.reduce((s, c) => s + chunkMs(c), 0) : body.music_length_ms;
   await recordUsage({ kind: 'music', model: body.model_id, source: body.composition_plan ? 'plan' : 'compose', ms, costUsd: musicCost(ms) });
   spent();
@@ -205,7 +206,7 @@ export async function separateStems(blob, variation = 'six_stems_v1', apiKey, na
   return files.map((f) => ({ name: f.name.split('/').pop(), blob: new Blob([f.bytes], { type: /\.wav$/i.test(f.name) ? 'audio/wav' : 'audio/mpeg' }) }));
 }
 
-export const SFX_MODELS = [{ id: 'eleven_text_to_sound_v3', label: 'Sound Effects v3 — newest' }, { id: 'eleven_text_to_sound_v2', label: 'Sound Effects v2' }];
+export const SFX_MODELS = [{ id: 'eleven_text_to_sound_v3', label: t('Sound Effects v3 — newest') }, { id: 'eleven_text_to_sound_v2', label: t('Sound Effects v2') }];
 // Sound effect → mp3 Blob. durationSec null = let the model decide (0.5–30 s).
 export async function soundEffect({ text, durationSec = null, loop = false, promptInfluence = 0.3, model = SFX_MODELS[0].id }, apiKey) {
   const body = { text: String(text || '').trim(), loop: !!loop, prompt_influence: Math.max(0, Math.min(1, +promptInfluence)), model_id: model };

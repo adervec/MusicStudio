@@ -4,6 +4,7 @@
 import { albumFolderPath, groupFolderPath, isGap } from './skeleton.js';
 import { sanitizeFilename } from '../audio/wav.js';
 import { musicCost, ttsCost } from '../state/pricing.js';
+import { t } from '../i18n.js';
 
 // Only http(s) links are ever rendered — a source URL can come from album.json or the Drive catalog.
 export const safeUrl = (u) => (/^https?:\/\/\S+$/i.test(String(u || '').trim()) ? String(u).trim() : '');
@@ -90,10 +91,10 @@ export function ensureGroupPath(path, groups, mkId) {
 }
 
 export const ALBUM_FIELDS = [
-  { key: 'genre', label: 'Genre', get: (p) => p.meta?.genre },
-  { key: 'year', label: 'Year', get: (p) => p.meta?.year },
-  { key: 'artist', label: 'Artist', get: (p) => p.artist || p.meta?.albumArtist },
-  { key: 'letter', label: 'First letter', get: (p) => (p.title || '').trim().charAt(0).toUpperCase() },
+  { key: 'genre', label: t('Genre'), get: (p) => p.meta?.genre },
+  { key: 'year', label: t('Year'), get: (p) => p.meta?.year },
+  { key: 'artist', label: t('Artist'), get: (p) => p.artist || p.meta?.albumArtist },
+  { key: 'letter', label: t('First letter'), get: (p) => (p.title || '').trim().charAt(0).toUpperCase() },
 ];
 export function albumField(p, key) { return String(ALBUM_FIELDS.find((f) => f.key === key)?.get(p) ?? '').trim(); }
 
@@ -108,11 +109,11 @@ export function planRearrange(items, groups = [], projects = [], mkId) {
     const cur = (it.kind === 'group' ? gs : ps).find((x) => x.id === it.id); if (!cur) continue;
     const r = ensureGroupPath(it.dest, gs, mkId);
     if ((cur.parentId || null) === r.parentId) continue;
-    if (it.kind === 'group' && r.parentId && descendantIds(it.id, gs).has(r.parentId)) { blocked.push({ id: it.id, why: 'into itself' }); continue; }
+    if (it.kind === 'group' && r.parentId && descendantIds(it.id, gs).has(r.parentId)) { blocked.push({ id: it.id, why: t('into itself') }); continue; }
     const name = nameOf(it.kind, cur);
     const clash = gs.some((g) => g.id !== it.id && (g.parentId || null) === r.parentId && nameOf('group', g) === name)
       || ps.some((p) => p.id !== it.id && (p.parentId || null) === r.parentId && nameOf('album', p) === name);
-    if (clash) { blocked.push({ id: it.id, why: 'name taken there' }); continue; }
+    if (clash) { blocked.push({ id: it.id, why: t('name taken there') }); continue; }
     gs.push(...r.created); created.push(...r.created);
     const from = it.kind === 'group' ? groupFolderPath(cur, gs) : albumFolderPath(cur, gs);
     const next = { ...cur, parentId: r.parentId };

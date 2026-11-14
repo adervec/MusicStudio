@@ -1,6 +1,7 @@
 import { musicModelFor } from '../api/elevenlabs.js';
 import { useEffect, useRef, useState } from 'react';
 import Dialog from './Dialog.jsx';
+import { t } from '../i18n.js';
 
 // The maker's shared cowork panel: the same component every app in the stable shows, so the
 // AI hand-off looks and behaves identically here, in GymTracker, in the portal and in
@@ -116,8 +117,8 @@ export default function Cowork({ projects, groups, onClose }) {
         // cowork v2 (house standard): review the reply before it replaces the current one; undo from the history
         channels: {
           coach: {
-            label: 'Album coach',
-            preview: (r) => [{ id: 'reply', label: 'Show this advice in Music Studio (replaces the current one)',
+            label: t('Album coach'),
+            preview: (r) => [{ id: 'reply', label: t('Show this advice in Music Studio (replaces the current one)'),
               detail: (typeof r === 'string' ? r : (r && (r.reply || (r.payload && r.payload.reply))) || '').slice(0, 400) }],
             apply: (r) => {
               let prev = ''; try { prev = localStorage.getItem('ms-coach-reply') || ''; } catch { /* private mode */ }
@@ -135,13 +136,8 @@ export default function Cowork({ projects, groups, onClose }) {
   }, []);
 
   return (
-    <Dialog title="AI cowork sync" onClose={onClose} width={640}>
-      <p className="note">
-        Hand your albums, briefs and prompts to an agent through a folder on this device —
-        CoworkSyncHub, Claude Desktop, or a person — and its notes come back here. Nothing is
-        uploaded, and only <code>cowork.json</code> and <code>coach/</code> are written, so this
-        never collides with the <code>album.json</code> hand-off.
-      </p>
+    <Dialog title={t('AI cowork sync')} onClose={onClose} width={640}>
+      <p className="note">{t('Hand your albums, briefs and prompts to an agent through a folder on this device — CoworkSyncHub, Claude Desktop, or a person — and its notes come back here. Nothing is uploaded, and only')}{' '}<code>cowork.json</code>{' '}{t('and')}{' '}<code>coach/</code>{' '}{t('are written, so this never collides with the')}{' '}<code>album.json</code>{' '}{t('hand-off.')}</p>
       <div ref={host} />
       {reply && <pre className="note" style={{ whiteSpace: 'pre-wrap', marginTop: 12 }}>{reply}</pre>}
     </Dialog>

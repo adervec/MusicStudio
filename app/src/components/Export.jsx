@@ -5,6 +5,7 @@ import { decodeBlob, bufferToStereo, applyEdits, assembleAlbum, encodeWav, build
 import { trackTags } from '../album/skeleton.js';
 import { writeToDir, download, ensureWritable } from '../backup/fs.js';
 import { renderTrackFile, coverPicture } from '../backup/publish.js';
+import { t } from '../i18n.js';
 
 const editsOf = (tk) => ({ trimStartMs: tk.trimStartMs || 0, trimEndMs: tk.trimEndMs || 0, fadeInMs: tk.fadeInMs || 0, fadeOutMs: tk.fadeOutMs || 0, gain: tk.gain ?? 1 });
 
@@ -33,20 +34,20 @@ export default function Export({ project, backupDir, backupName, albumDir, gapMs
       if (mode === 'tracks') {
         const names = [], titles = [], secs = [];
         for (let i = 0; i < ready.length; i++) {
-          setBusy(`Rendering ${i + 1}/${ready.length}…`);
+          setBusy(t('Rendering {value}/{count}…', { value: i + 1, count: ready.length }));
           const f = await renderTrackFile(project, ready[i], i, ready.length, picture);
           await put(folder + f.name, f.out);
           names.push(f.name); titles.push(f.title); secs.push(f.secs);
         }
-        setBusy('Writing playlist…');
+        setBusy(t('Writing playlist…'));
         await put(folder + `${sanitizeFilename(album)}.m3u`, new Blob([buildM3u(names, titles, secs, album)], { type: 'audio/x-mpegurl' }));
       } else {
         const items = [];
         for (let i = 0; i < ready.length; i++) {
-          setBusy(`Decoding ${i + 1}/${ready.length}…`);
+          setBusy(t('Decoding {value}/{count}…', { value: i + 1, count: ready.length }));
           items.push({ channels: applyEdits(bufferToStereo(await decodeBlob(await getClip(ready[i].clipId))), 44100, editsOf(ready[i])) });
         }
-        setBusy('Mixing…');
+        setBusy(t('Mixing…'));
         const { channels, sampleRate } = assembleAlbum(items, { gapMs, crossfadeMs: crossfadeSec * 1000, sampleRate: 44100 });
         await put(folder + `${sanitizeFilename(album)}.wav`, new Blob([encodeWav(channels, sampleRate, trackTags(project, album, 0, 1))], { type: 'audio/wav' }));
       }
@@ -56,17 +57,15 @@ export default function Export({ project, backupDir, backupName, albumDir, gapMs
   }
 
   return (
-    <Dialog title={`Export “${album}”`} onClose={onClose} width={520}
-      footer={<><button onClick={onClose}>Close</button><button className="primary" onClick={run} disabled={!ready.length || !!busy}>{busy || 'Export'}</button></>}>
-      {!ready.length ? <p className="note">No generated tracks yet. Generate or upload audio first.</p> : <>
-        <p className="note">{ready.length} track{ready.length === 1 ? '' : 's'} ready · destination: {backupName ? <b>{backupName}</b> : 'browser download'}</p>
-        <label><input type="radio" name="m" checked={mode === 'tracks'} onChange={() => setMode('tracks')} style={{ width: 'auto', marginRight: 6 }} />
-          Separate track files (originals + .m3u; edited tracks & cover baked in)</label>
-        <label><input type="radio" name="m" checked={mode === 'album'} onChange={() => setMode('album')} style={{ width: 'auto', marginRight: 6 }} />
-          One mixed album WAV (trim/fade/volume applied)</label>
+    <Dialog title={t('Export “{album}”', { album: album })} onClose={onClose} width={520}
+      footer={<><button onClick={onClose}>{t('Close')}</button><button className="primary" onClick={run} disabled={!ready.length || !!busy}>{busy || t('Export')}</button></>}>
+      {!ready.length ? <p className="note">{t('No generated tracks yet. Generate or upload audio first.')}</p> : <>
+        <p className="note">{t.n('{n} track', '{n} tracks', ready.length)}{' '}{t('ready · destination:')}{' '}{backupName ? <b>{backupName}</b> : t('browser download')}</p>
+        <label><input type="radio" name="m" checked={mode === 'tracks'} onChange={() => setMode('tracks')} style={{ width: 'auto', marginRight: 6 }} />{t('Separate track files (originals + .m3u; edited tracks & cover baked in)')}</label>
+        <label><input type="radio" name="m" checked={mode === 'album'} onChange={() => setMode('album')} style={{ width: 'auto', marginRight: 6 }} />{t('One mixed album WAV (trim/fade/volume applied)')}</label>
         {mode === 'album' && (
           <div className="row" style={{ marginTop: 6 }}>
-            <label style={{ margin: 0 }}>Crossfade (sec, 0 = {gapMs}ms gaps)</label>
+            <label style={{ margin: 0 }}>{t('Crossfade (sec, 0 = {gapMs}ms gaps)', { gapMs: gapMs })}</label>
             <input type="number" min="0" max="10" step="0.5" value={crossfadeSec} onChange={(e) => setCrossfadeSec(+e.target.value)} style={{ width: 90 }} />
           </div>
         )}
