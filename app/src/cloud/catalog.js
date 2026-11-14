@@ -12,7 +12,7 @@ export const CATALOG_VERSION = 1;
 // prompts. Audio never travels this channel — only text.
 function albumEntry(p, groups, syncMap) {
   const tracks = p.tracks || [];
-  const ready = tracks.filter((t) => t.clipId);
+  const ready = tracks.filter((tk) => tk.clipId);
   return {
     id: p.id,
     title: p.title || 'Untitled',
@@ -23,12 +23,12 @@ function albumEntry(p, groups, syncMap) {
     updatedAt: p.updatedAt || 0,
     trackCount: tracks.length,
     readyCount: ready.length,
-    ms: ready.reduce((s, t) => s + (t.durationMs || 0), 0),
+    ms: ready.reduce((s, tk) => s + (tk.durationMs || 0), 0),
     onDevice: !!syncMap?.[p.id]?.on,
     syncedAt: syncMap?.[p.id]?.at || 0,
-    tracks: tracks.map((t) => ({
-      title: t.title || '', type: t.type || 'music', ready: !!t.clipId,
-      ms: t.durationMs || 0, prompt: t.prompt || t.text || '', fav: !!t.fav, url: t.sourceUrl || '',
+    tracks: tracks.map((tk) => ({
+      title: tk.title || '', type: tk.type || 'music', ready: !!tk.clipId,
+      ms: tk.durationMs || 0, prompt: tk.prompt || tk.text || '', fav: !!tk.fav, url: tk.sourceUrl || '',
     })),
   };
 }

@@ -30,9 +30,9 @@ function loadCowork() {
   });
 }
 
-function coachHash(t) {
+function coachHash(tk) {
   let h = 5381;
-  for (let i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < tk.length; i++) h = ((h * 33) ^ tk.charCodeAt(i)) >>> 0;
   return h.toString(16);
 }
 
@@ -84,16 +84,16 @@ export default function Cowork({ projects, groups, onClose }) {
           const albums = (ps || []).map((p) => ({
             title: p.title || '', artist: p.artist || '', group: groupName(p.groupId),
             description: p.description || '',
-            tracks: (p.tracks || []).map((t) => ({
-              title: t.title || '', type: t.type,
-              prompt: t.type === 'music' ? (t.prompt || '') : (t.text || ''),
-              lengthSec: Math.round((t.lengthMs || 0) / 1000),
-              model: t.type === 'music' ? musicModelFor(t) : null, instrumental: !!t.instrumental,
-              generated: !!t.clipId,
+            tracks: (p.tracks || []).map((tk) => ({
+              title: tk.title || '', type: tk.type,
+              prompt: tk.type === 'music' ? (tk.prompt || '') : (tk.text || ''),
+              lengthSec: Math.round((tk.lengthMs || 0) / 1000),
+              model: tk.type === 'music' ? musicModelFor(tk) : null, instrumental: !!tk.instrumental,
+              generated: !!tk.clipId,
             })),
           }));
           const tracks = albums.reduce((n, a) => n + a.tracks.length, 0);
-          const generated = albums.reduce((n, a) => n + a.tracks.filter((t) => t.generated).length, 0);
+          const generated = albums.reduce((n, a) => n + a.tracks.filter((tk) => tk.generated).length, 0);
           const payload = {
             totals: { albums: albums.length, tracks, generated, gaps: tracks - generated },
             albums,

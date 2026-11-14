@@ -13,9 +13,9 @@ export default function PlayerBar({ info, onOpenAlbum }) {
   const shown = p.queue.length > 0;
   useEffect(() => { document.documentElement.style.setProperty('--bar', shown ? '62px' : '0px'); }, [shown]);
   if (!shown) return null;
-  const t = p.queue[p.index];
+  const tk = p.queue[p.index];
   const meta = (x) => ({ title: x?.title, ...(info?.(x?.id) || {}) });
-  const m = meta(t);
+  const m = meta(tk);
   return (
     <>
       {open && (

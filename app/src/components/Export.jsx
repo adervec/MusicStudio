@@ -6,13 +6,13 @@ import { trackTags } from '../album/skeleton.js';
 import { writeToDir, download, ensureWritable } from '../backup/fs.js';
 import { renderTrackFile, coverPicture } from '../backup/publish.js';
 
-const editsOf = (t) => ({ trimStartMs: t.trimStartMs || 0, trimEndMs: t.trimEndMs || 0, fadeInMs: t.fadeInMs || 0, fadeOutMs: t.fadeOutMs || 0, gain: t.gain ?? 1 });
+const editsOf = (tk) => ({ trimStartMs: tk.trimStartMs || 0, trimEndMs: tk.trimEndMs || 0, fadeInMs: tk.fadeInMs || 0, fadeOutMs: tk.fadeOutMs || 0, gain: tk.gain ?? 1 });
 
 // Export the album — either separate track files (originals copied when unedited, else rendered to
 // WAV; ID3 tags + embedded cover on MP3s) + an .m3u, or one mixed-down WAV (per-track trim/fade/gain,
 // then gaps or a crossfade). Writes into the backup folder if set, else downloads.
 export default function Export({ project, backupDir, backupName, albumDir, gapMs = 800, onClose }) {
-  const ready = (project.tracks || []).filter((t) => t.clipId);
+  const ready = (project.tracks || []).filter((tk) => tk.clipId);
   const [mode, setMode] = useState('tracks');
   const [crossfadeSec, setCrossfadeSec] = useState(0);
   const [busy, setBusy] = useState('');

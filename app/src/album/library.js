@@ -15,14 +15,14 @@ export function libraryRows(projects, groups = []) {
     const path = albumFolderPath(p, groups);
     const group = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
     const genre = p.meta?.genre || '', year = p.meta?.year || '', artist = p.artist || p.meta?.albumArtist || '';
-    (p.tracks || []).forEach((t, i) => {
-      const prompt = t.type === 'dialog' ? (t.text || '') : (t.prompt || '');
+    (p.tracks || []).forEach((tk, i) => {
+      const prompt = tk.type === 'dialog' ? (tk.text || '') : (tk.prompt || '');
       const r = {
-        id: t.id, albumId: p.id, album: p.title || 'Untitled', group, n: i + 1, title: t.title || '', type: t.type || 'music',
-        status: t.clipId ? 'ready' : isGap(t) ? 'gap' : 'empty', ms: t.clipId ? (t.durationMs || 0) : 0,
-        planMs: t.lengthMs || 0, fav: !!t.fav, rating: t.rating || 0, notes: [t.notes, ...(t.likes || []), ...(t.dislikes || [])].filter(Boolean).join(' · '), prompt, genre, year, artist, url: safeUrl(t.sourceUrl), qc: t.qc?.grade || '', takes: (t.takes || []).length + (t.clipId ? 1 : 0), seed: Number.isInteger(t.seed) ? t.seed : '', track: t,
+        id: tk.id, albumId: p.id, album: p.title || 'Untitled', group, n: i + 1, title: tk.title || '', type: tk.type || 'music',
+        status: tk.clipId ? 'ready' : isGap(tk) ? 'gap' : 'empty', ms: tk.clipId ? (tk.durationMs || 0) : 0,
+        planMs: tk.lengthMs || 0, fav: !!tk.fav, rating: tk.rating || 0, notes: [tk.notes, ...(tk.likes || []), ...(tk.dislikes || [])].filter(Boolean).join(' · '), prompt, genre, year, artist, url: safeUrl(tk.sourceUrl), qc: tk.qc?.grade || '', takes: (tk.takes || []).length + (tk.clipId ? 1 : 0), seed: Number.isInteger(tk.seed) ? tk.seed : '', track: tk,
       };
-      r.hay = [r.title, r.album, group, prompt, genre, year, artist, r.url, r.notes, t.lyrics || ''].join(' ').toLowerCase();
+      r.hay = [r.title, r.album, group, prompt, genre, year, artist, r.url, r.notes, tk.lyrics || ''].join(' ').toLowerCase();
       rows.push(r);
     });
   }
@@ -163,13 +163,13 @@ export function pairItems(prompts = [], files = []) {
 // Full library logbook — every track with everything needed to find, judge or re-make it: prompts,
 // plans, lyrics, seeds, models, quality, takes, files, ratings, notes, links.
 export function logbook(projects = [], groups = []) {
-  return (projects || []).flatMap((p) => (p.tracks || []).map((t, i) => ({
-    album: p.title || '', albumId: p.id, folder: albumFolderPath(p, groups), n: i + 1, trackId: t.id, title: t.title || '', type: t.type,
-    status: t.clipId ? 'ready' : isGap(t) ? 'gap' : 'empty', file: t.backupFile || null, durationMs: t.durationMs || 0,
-    prompt: t.prompt || t.text || '', lyrics: t.lyrics || '', usePlan: !!t.usePlan, plan: t.plan || null, planUsed: t.genPlan || null,
-    model: t.genModel || t.model || '', seed: Number.isInteger(t.seed) ? t.seed : null, songId: t.songId || null, qc: t.qc || null,
-    elevenlabs: t.genMeta || null, takes: (t.takes || []).map((k) => ({ file: k.backupFile, seed: k.seed, qc: k.qc?.grade || null, note: k.note || '', at: k.at || 0 })),
-    stems: (t.stems || []).map((s) => s.file), rating: t.rating || 0, fav: !!t.fav, notes: t.notes || '', likes: t.likes || [], dislikes: t.dislikes || [],
-    sourceUrl: t.sourceUrl || '', albumMeta: p.meta || {},
+  return (projects || []).flatMap((p) => (p.tracks || []).map((tk, i) => ({
+    album: p.title || '', albumId: p.id, folder: albumFolderPath(p, groups), n: i + 1, trackId: tk.id, title: tk.title || '', type: tk.type,
+    status: tk.clipId ? 'ready' : isGap(tk) ? 'gap' : 'empty', file: tk.backupFile || null, durationMs: tk.durationMs || 0,
+    prompt: tk.prompt || tk.text || '', lyrics: tk.lyrics || '', usePlan: !!tk.usePlan, plan: tk.plan || null, planUsed: tk.genPlan || null,
+    model: tk.genModel || tk.model || '', seed: Number.isInteger(tk.seed) ? tk.seed : null, songId: tk.songId || null, qc: tk.qc || null,
+    elevenlabs: tk.genMeta || null, takes: (tk.takes || []).map((k) => ({ file: k.backupFile, seed: k.seed, qc: k.qc?.grade || null, note: k.note || '', at: k.at || 0 })),
+    stems: (tk.stems || []).map((s) => s.file), rating: tk.rating || 0, fav: !!tk.fav, notes: tk.notes || '', likes: tk.likes || [], dislikes: tk.dislikes || [],
+    sourceUrl: tk.sourceUrl || '', albumMeta: p.meta || {},
   })));
 }

@@ -20,7 +20,7 @@ export const MUSIC_MODELS = [
 // t.model of an unpinned track is history (whatever was current when it was made), never a choice —
 // so a new model release upgrades every gap automatically. Put new models FIRST in MUSIC_MODELS.
 export const LATEST_MUSIC_MODEL = MUSIC_MODELS[0].id;
-export const musicModelFor = (t) => (t?.modelPinned && MUSIC_MODELS.some((m) => m.id === t.model) ? t.model : LATEST_MUSIC_MODEL);
+export const musicModelFor = (tk) => (tk?.modelPinned && MUSIC_MODELS.some((m) => m.id === tk.model) ? tk.model : LATEST_MUSIC_MODEL);
 // Model fields for a new track from the Settings default ('latest' = follow the newest).
 export const newTrackModel = (prefs) => (prefs?.musicModel && prefs.musicModel !== 'latest' && MUSIC_MODELS.some((m) => m.id === prefs.musicModel)
   ? { model: prefs.musicModel, modelPinned: true } : { model: LATEST_MUSIC_MODEL, modelPinned: false });

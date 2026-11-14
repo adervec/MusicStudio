@@ -64,22 +64,22 @@ export default function App() {
     const iv = setInterval(loadFinetunes, 60000); return () => clearInterval(iv);
   }, [finetunes, loadFinetunes]);
   async function makeFinetune({ name, genre, source }) {
-    const pool = projects.flatMap((p) => (p.tracks || []).filter((t) => t.clipId && (source === 'rated4' ? (t.rating || 0) >= 4 : source === 'fav' ? t.fav : p.id === source)));
+    const pool = projects.flatMap((p) => (p.tracks || []).filter((tk) => tk.clipId && (source === 'rated4' ? (tk.rating || 0) >= 4 : source === 'fav' ? tk.fav : p.id === source)));
     if (!pool.length) return showToast('No songs with audio match that choice');
     const files = [];
-    for (const t of pool.slice(0, 50)) { const b = await getClip(t.clipId); if (b) files.push({ blob: b, name: t.backupFile || `${sanitizeFilename(t.title || 'track')}.mp3` }); }
+    for (const tk of pool.slice(0, 50)) { const b = await getClip(tk.clipId); if (b) files.push({ blob: b, name: tk.backupFile || `${sanitizeFilename(tk.title || 'track')}.mp3` }); }
     try { await createFinetune({ name: name.trim(), genre: genre.trim(), files, model: musicModelFor({}) }, apiKey); showToast(`🎓 Finetune “${name}” started with ${files.length} songs`); loadFinetunes(); }
     catch (e) { showToast('Finetune failed: ' + (e.message || e)); }
   }
   useEffect(() => {
     if (!apiKey) { setCredits(null); return; }
-    let t = null;
+    let tk = null;
     const load = () => getSubscription(apiKey).then(setCredits).catch(() => {});
-    const soon = () => { clearTimeout(t); t = setTimeout(load, 2000); };
+    const soon = () => { clearTimeout(tk); tk = setTimeout(load, 2000); };
     load();
     const iv = setInterval(load, 600000);
     window.addEventListener('musicstudio:spent', soon);
-    return () => { clearTimeout(t); clearInterval(iv); window.removeEventListener('musicstudio:spent', soon); };
+    return () => { clearTimeout(tk); clearInterval(iv); window.removeEventListener('musicstudio:spent', soon); };
   }, [apiKey]);
   const [dir, setDir] = useState(null);
   const [pubDir, setPubDir] = useState(null); // publish destination (e.g. phone-synced drive)
@@ -166,7 +166,7 @@ export default function App() {
       if (h) await importFromFolder(true, { dir: h, ignored: ign, groups: gs, projects: ps });
       await ensureGrouped(h); // migrate any legacy ungrouped albums
       for (const p of await listProjects()) { // a reload drops the in-memory queue: un-stick its tracks
-        if ((p.tracks || []).some((t) => t.status === 'queued' || t.status === 'gen')) await saveProject({ ...p, tracks: p.tracks.map((t) => (t.status === 'queued' || t.status === 'gen' ? { ...t, status: t.clipId ? 'ready' : 'idle' } : t)) }, { keepTime: true });
+        if ((p.tracks || []).some((tk) => tk.status === 'queued' || tk.status === 'gen')) await saveProject({ ...p, tracks: p.tracks.map((tk) => (tk.status === 'queued' || tk.status === 'gen' ? { ...tk, status: tk.clipId ? 'ready' : 'idle' } : tk)) }, { keepTime: true });
       }
       await refreshGroups(); await refreshProjects();
       // Reconnect the Drive channel silently (an existing grant only — never a popup on boot).
@@ -232,17 +232,17 @@ export default function App() {
   // already in the album folder — e.g. music made before this app). Reads it into the clip store so
   // the track is "ready", not a gap. Idempotent (skips tracks that already have a clip).
   async function backfillTracks(project, dh) {
-    const d = dh || dir; if (!d || !project?.tracks?.some((t) => !t.clipId && (t.importFile || t.backupFile))) return project;
+    const d = dh || dir; if (!d || !project?.tracks?.some((tk) => !tk.clipId && (tk.importFile || tk.backupFile))) return project;
     const base = albumPath(project);
     const tracks = [];
-    for (const t of project.tracks) {
-      const src = t.importFile || t.backupFile; // pre-existing audio, or an app-written file to recover
-      if (t.clipId || !src) { tracks.push(t); continue; }
+    for (const tk of project.tracks) {
+      const src = tk.importFile || tk.backupFile; // pre-existing audio, or an app-written file to recover
+      if (tk.clipId || !src) { tracks.push(tk); continue; }
       try {
         const blob = await readBlobFrom(d, `${base}/${src}`);
         const clipId = uid('clip_'); await putClip(clipId, blob);
-        tracks.push({ ...t, clipId, durationMs: await clipDurationMs(blob), sizeBytes: blob.size, mime: blob.type, status: 'ready', backupFile: src });
-      } catch { tracks.push(t); } // referenced file missing — leave as a gap
+        tracks.push({ ...tk, clipId, durationMs: await clipDurationMs(blob), sizeBytes: blob.size, mime: blob.type, status: 'ready', backupFile: src });
+      } catch { tracks.push(tk); } // referenced file missing — leave as a gap
     }
     return { ...project, tracks };
   }
@@ -256,23 +256,23 @@ export default function App() {
       if (!(await ensureWritable(dir))) return;
       const base = albumPath(p);
       const backfilled = await backfillTracks(p, dir); // attach referenced-but-missing audio
-      const prevById = new Map((p.tracks || []).map((t) => [t.id, t]));
-      const recovered = (backfilled.tracks || []).filter((t) => t.clipId && !prevById.get(t.id)?.clipId).length;
+      const prevById = new Map((p.tracks || []).map((tk) => [tk.id, tk]));
+      const recovered = (backfilled.tracks || []).filter((tk) => tk.clipId && !prevById.get(tk.id)?.clipId).length;
       const referenced = new Set();
-      for (const t of backfilled.tracks || []) { if (t.backupFile) referenced.add(t.backupFile); if (t.importFile) referenced.add(t.importFile); for (const k of t.takes || []) if (k.backupFile) referenced.add(k.backupFile); for (const st of t.stems || []) if (st.file) referenced.add(st.file); }
+      for (const tk of backfilled.tracks || []) { if (tk.backupFile) referenced.add(tk.backupFile); if (tk.importFile) referenced.add(tk.importFile); for (const k of tk.takes || []) if (k.backupFile) referenced.add(k.backupFile); for (const st of tk.stems || []) if (st.file) referenced.add(st.file); }
       const loose = (await listFiles(dir, base)).filter((name) => AUDIO_RE.test(name) && !referenced.has(name) && name !== p.cover?.file);
       // A loose file named like a gap track (e.g. "03 Neon Rain.mp3" ↔ "Neon Rain") is that track's audio.
-      const gaps = (backfilled.tracks || []).filter((t) => !t.clipId);
+      const gaps = (backfilled.tracks || []).filter((tk) => !tk.clipId);
       const matched = new Map(); // trackId → filename
-      pairItems(gaps.map((t) => ({ title: t.title, prompt: '-' })), loose.map((name) => ({ name }))).slice(0, gaps.length)
+      pairItems(gaps.map((tk) => ({ title: tk.title, prompt: '-' })), loose.map((name) => ({ name }))).slice(0, gaps.length)
         .forEach((r, i) => { if (r.file) matched.set(gaps[i].id, r.file.name); });
       const linked = [];
-      for (const t of backfilled.tracks || []) {
-        const name = matched.get(t.id);
-        if (!name) { linked.push(t); continue; }
+      for (const tk of backfilled.tracks || []) {
+        const name = matched.get(tk.id);
+        if (!name) { linked.push(tk); continue; }
         const blob = await readBlobFrom(dir, `${base}/${name}`);
         const clipId = uid('clip_'); await putClip(clipId, blob);
-        linked.push({ ...t, clipId, durationMs: await clipDurationMs(blob), sizeBytes: blob.size, mime: blob.type, status: 'ready', error: '', backupFile: name });
+        linked.push({ ...tk, clipId, durationMs: await clipDurationMs(blob), sizeBytes: blob.size, mime: blob.type, status: 'ready', error: '', backupFile: name });
       }
       const taken = new Set(matched.values());
       const newTracks = [];
@@ -293,20 +293,20 @@ export default function App() {
   // picked from disk (copied into the folder). Fixes a missing/wrong link without regenerating.
   async function listAlbumAudio() {
     const p = activeRef.current; if (!p || !dir || !(await ensureWritable(dir))) return [];
-    const used = new Set((p.tracks || []).filter((t) => t.clipId).map((t) => t.backupFile).filter(Boolean));
+    const used = new Set((p.tracks || []).filter((tk) => tk.clipId).map((tk) => tk.backupFile).filter(Boolean));
     return (await listFiles(dir, albumPath(p))).filter((n) => AUDIO_RE.test(n)).map((name) => ({ name, used: used.has(name) }));
   }
   async function linkTrackFile(trackId, src) {
-    const p = activeRef.current; const t = p?.tracks?.find((x) => x.id === trackId); if (!t) return;
+    const p = activeRef.current; const tk = p?.tracks?.find((x) => x.id === trackId); if (!tk) return;
     try {
       const inFolder = typeof src === 'string';
       const blob = inFolder ? await readBlobFrom(dir, `${albumPath(p)}/${src}`) : src;
       const clipId = uid('clip_'); await putClip(clipId, blob); // ponytail: the old clip (if any) is left in the store — it may be shared by a duplicate track
       const up = { clipId, durationMs: await clipDurationMs(blob), sizeBytes: blob.size, mime: blob.type, status: 'ready', error: '', backupFile: inFolder ? src : null, importFile: undefined };
-      if (!inFolder) up.backupFile = await backupClip({ ...t, ...up }, blob);
+      if (!inFolder) up.backupFile = await backupClip({ ...tk, ...up }, blob);
       updateProject((pp) => ({ ...pp, tracks: pp.tracks.map((x) => (x.id === trackId ? { ...x, ...up } : x)) }));
       writeSkeleton();
-      showToast(`📎 “${t.title || 'Track'}” → ${inFolder ? src : src.name}`);
+      showToast(`📎 “${tk.title || 'Track'}” → ${inFolder ? src : src.name}`);
     } catch (e) { showToast('Link failed: ' + (e.message || e)); }
   }
 
@@ -582,9 +582,9 @@ export default function App() {
   async function duplicateAlbum(a) {
     const src = a && (await getProject(a.id)); if (!src) return;
     const tracks = [];
-    for (const t of src.tracks || []) {
-      const nt = { ...t, id: uid('t_'), backupFile: null };
-      if (t.clipId) { const b = await getClip(t.clipId); if (b) { const nid = uid('clip_'); await putClip(nid, b); nt.clipId = nid; } }
+    for (const tk of src.tracks || []) {
+      const nt = { ...tk, id: uid('t_'), backupFile: null };
+      if (tk.clipId) { const b = await getClip(tk.clipId); if (b) { const nid = uid('clip_'); await putClip(nid, b); nt.clipId = nid; } }
       tracks.push(nt);
     }
     const copy = { ...src, id: uid('p_'), title: `${src.title || 'Album'} (copy)`, tracks, cover: null, createdAt: Date.now() };
@@ -707,7 +707,7 @@ export default function App() {
             if (prev && prev.folder !== st.folder) await removeDir(pubDir, prev.folder).catch(() => {}); // album renamed
             n += await publishAlbum(p, pubDir); republished.push(p.id);
           } else {
-            const ready = (p.tracks || []).filter((t) => t.clipId);
+            const ready = (p.tracks || []).filter((tk) => tk.clipId);
             for (const [i, f] of st.files.entries()) {
               const was = prev.sigs[f.trackId] || '';
               if (was === f.sig + f.audio) continue;
@@ -734,18 +734,18 @@ export default function App() {
   const tasteRef = useRef('');
   useEffect(() => {
     if (!dir) return;
-    const t = setTimeout(async () => {
+    const tk = setTimeout(async () => {
       if (!(await canWriteQuietly(dir))) return;
       const { json, markdown } = buildTaste(projects, groups);
       if (markdown === tasteRef.current) return;
       try { await writeToDir(dir, 'TASTE.md', new Blob([markdown], { type: 'text/markdown' })); await writeToDir(dir, 'taste.json', new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' })); tasteRef.current = markdown; } catch { /* retried on the next change */ }
     }, 6000);
-    return () => clearTimeout(t);
+    return () => clearTimeout(tk);
   }, [projects, groups, dir]);
   useEffect(() => { // debounce: every edit restarts the clock, so typing never triggers a write
     if (!dir && !pubDir) return;
-    const t = setTimeout(() => tagSyncRef.current?.(), 5000);
-    return () => clearTimeout(t);
+    const tk = setTimeout(() => tagSyncRef.current?.(), 5000);
+    return () => clearTimeout(tk);
   }, [projects, groups, dir, pubDir, syncMap]);
 
   // ── Google Drive channel — the desktop publishes a catalog; a phone publishes sync requests ──
@@ -858,16 +858,16 @@ export default function App() {
       const tracks = [];
       for (const [i, r] of keep.entries()) {
         setWizBusy(`Adding ${i + 1}/${keep.length}…`);
-        const t = { id: uid('t_'), type: r.prompt.trim() ? 'music' : 'upload', title: r.title.trim() || `Track ${i + 1}`, prompt: r.prompt.trim(), sourceUrl: r.url || '', lengthMs: (prefs.defaultLengthSec || 60) * 1000, ...newTrackModel(prefs), instrumental: false, status: 'idle', gain: 1 };
+        const tk = { id: uid('t_'), type: r.prompt.trim() ? 'music' : 'upload', title: r.title.trim() || `Track ${i + 1}`, prompt: r.prompt.trim(), sourceUrl: r.url || '', lengthMs: (prefs.defaultLengthSec || 60) * 1000, ...newTrackModel(prefs), instrumental: false, status: 'idle', gain: 1 };
         if (r.file) {
           const clipId = uid('clip_'); await putClip(clipId, r.file);
-          Object.assign(t, { clipId, fileName: r.file.name, durationMs: await clipDurationMs(r.file), sizeBytes: r.file.size, mime: r.file.type, status: 'ready' });
+          Object.assign(tk, { clipId, fileName: r.file.name, durationMs: await clipDurationMs(r.file), sizeBytes: r.file.size, mime: r.file.type, status: 'ready' });
           if (canWrite) {
-            const name = `${sanitizeFilename(t.title)}_${clipId.slice(-5)}.${extOf(r.file.type, r.file.name)}`;
-            try { await writeToDir(dir, `${path}/${name}`, r.file); t.backupFile = name; } catch { /* stays in the browser store */ }
+            const name = `${sanitizeFilename(tk.title)}_${clipId.slice(-5)}.${extOf(r.file.type, r.file.name)}`;
+            try { await writeToDir(dir, `${path}/${name}`, r.file); tk.backupFile = name; } catch { /* stays in the browser store */ }
           }
         }
-        tracks.push(t);
+        tracks.push(tk);
       }
       for (const g of created) await fsOp((d) => ensureDir(d, groupFolderPath(g, all)));
       await saveProject({ ...base, tracks });
@@ -877,7 +877,7 @@ export default function App() {
       setShowLibrary(false); setGroupViewId(null); setPlaylistId(null);
       lastJsonRef.current = null; setActive(p); writeSkeleton(p);
       setModal(null);
-      showToast(`🧩 “${p.title}” — ${tracks.filter((t) => t.clipId).length} with audio, ${tracks.filter((t) => !t.clipId).length} to generate`);
+      showToast(`🧩 “${p.title}” — ${tracks.filter((tk) => tk.clipId).length} with audio, ${tracks.filter((tk) => !tk.clipId).length} to generate`);
     } catch (e) { showToast('Build failed: ' + (e.message || e)); }
     setWizBusy('');
   }
@@ -902,19 +902,19 @@ export default function App() {
     if (activeRef.current?.id === projectId) updateProject(fn);
     refreshProjects();
   }
-  const patchTrack = (projectId, trackId, up) => updateProjectById(projectId, (p) => ({ ...p, tracks: (p.tracks || []).map((t) => (t.id === trackId ? { ...t, ...up } : t)) }));
+  const patchTrack = (projectId, trackId, up) => updateProjectById(projectId, (p) => ({ ...p, tracks: (p.tracks || []).map((tk) => (tk.id === trackId ? { ...tk, ...up } : tk)) }));
   // Uploads are pinned to the album they were started in, like generation.
   async function uploadTracks(projectId, files) {
     const canWrite = !!dir && (await ensureWritable(dir).catch(() => false));
     for (const f of files) {
       const clipId = uid('clip_'); await putClip(clipId, f);
-      const t = { id: uid('t_'), type: 'upload', title: f.name.replace(/\.[^.]+$/, ''), fileName: f.name, clipId, durationMs: await clipDurationMs(f), sizeBytes: f.size, mime: f.type, status: 'ready', gain: 1 };
+      const tk = { id: uid('t_'), type: 'upload', title: f.name.replace(/\.[^.]+$/, ''), fileName: f.name, clipId, durationMs: await clipDurationMs(f), sizeBytes: f.size, mime: f.type, status: 'ready', gain: 1 };
       const now = await freshProject(projectId); if (!now) return;
       if (canWrite) {
-        const name = `${sanitizeFilename(t.title)}_${clipId.slice(-5)}.${extOf(f.type, f.name)}`;
-        try { await writeToDir(dir, `${albumFolderPath(now, groupsRef.current)}/${name}`, f); t.backupFile = name; } catch { /* stays in the browser store */ }
+        const name = `${sanitizeFilename(tk.title)}_${clipId.slice(-5)}.${extOf(f.type, f.name)}`;
+        try { await writeToDir(dir, `${albumFolderPath(now, groupsRef.current)}/${name}`, f); tk.backupFile = name; } catch { /* stays in the browser store */ }
       }
-      await updateProjectById(projectId, (p) => ({ ...p, tracks: [...(p.tracks || []), t] }));
+      await updateProjectById(projectId, (p) => ({ ...p, tracks: [...(p.tracks || []), tk] }));
     }
     const saved = await freshProject(projectId); if (saved) writeSkeleton(saved);
   }
@@ -925,14 +925,14 @@ export default function App() {
   async function enqueueBatches(batches, opts = {}) {
     if (prefs.confirmSpend !== false && !opts.confirmed) {
       const items = []; const names = [];
-      for (const b of batches) { const p = await freshProject(b.projectId); if (!p) continue; names.push(p.title || 'Album'); items.push(...b.trackIds.map((id) => p.tracks.find((t) => t.id === id)).filter(Boolean)); }
-      setSpendAsk({ batches, opts, album: names.length > 1 ? `${names.length} albums` : names[0] || 'Album', ...estimateJobs(items.map((t) => ({ ...t, videoCount: opts.videos?.length })), { takes: prefs.takes || 1, model: musicModelFor, kind: opts.kind || '' }) });
+      for (const b of batches) { const p = await freshProject(b.projectId); if (!p) continue; names.push(p.title || 'Album'); items.push(...b.trackIds.map((id) => p.tracks.find((tk) => tk.id === id)).filter(Boolean)); }
+      setSpendAsk({ batches, opts, album: names.length > 1 ? `${names.length} albums` : names[0] || 'Album', ...estimateJobs(items.map((tk) => ({ ...tk, videoCount: opts.videos?.length })), { takes: prefs.takes || 1, model: musicModelFor, kind: opts.kind || '' }) });
       return;
     }
     for (const b of batches) await enqueue(b.projectId, b.trackIds, { ...opts, confirmed: true });
   }
   async function rateTracks(batches, rating) {
-    for (const b of batches) { const ids = new Set(b.trackIds); await updateProjectById(b.projectId, (p) => ({ ...p, tracks: (p.tracks || []).map((t) => (ids.has(t.id) ? { ...t, rating } : t)) })); }
+    for (const b of batches) { const ids = new Set(b.trackIds); await updateProjectById(b.projectId, (p) => ({ ...p, tracks: (p.tracks || []).map((tk) => (ids.has(tk.id) ? { ...tk, rating } : tk)) })); }
   }
   async function enqueue(projectId, trackIds, opts = {}) {
     if (!apiKey) { showToast('Set your ElevenLabs API key in Settings first'); setModal('settings'); return; }
@@ -940,7 +940,7 @@ export default function App() {
     const p = await freshProject(projectId); if (!p) return;
     if (prefs.confirmSpend !== false && !opts.confirmed) return enqueueBatches([{ projectId, trackIds }], opts);
     const busy = new Set(jobsRef.current.filter((j) => (j.state === 'queued' || j.state === 'running') && (j.kind || '') === (opts.kind || '')).map((j) => j.trackId));
-    const add = trackIds.filter((id) => !busy.has(id)).map((id) => ({ id: uid('j_'), projectId, trackId: id, album: p.title || 'Album', title: p.tracks.find((t) => t.id === id)?.title || 'Track', state: 'queued', plan: opts.plan || null, kind: opts.kind || '', videos: opts.videos || null, video: opts.video || null, variation: opts.variation || '' }));
+    const add = trackIds.filter((id) => !busy.has(id)).map((id) => ({ id: uid('j_'), projectId, trackId: id, album: p.title || 'Album', title: p.tracks.find((tk) => tk.id === id)?.title || 'Track', state: 'queued', plan: opts.plan || null, kind: opts.kind || '', videos: opts.videos || null, video: opts.video || null, variation: opts.variation || '' }));
     if (!add.length) return;
     if (typeof Notification !== 'undefined' && Notification.permission === 'default' && add.length > 1) { try { Notification.requestPermission(); } catch { /* */ } }
     if (opts.kind !== 'stems') for (const j of add) await patchTrack(projectId, j.trackId, { status: 'queued', error: '' });
@@ -961,22 +961,22 @@ export default function App() {
         const job = jobsRef.current.find((j) => j.state === 'queued'); if (!job) break;
         setJob(job.id, { state: 'running' });
         const p = await freshProject(job.projectId);
-        const t = p?.tracks?.find((x) => x.id === job.trackId);
-        if (!t) { setJob(job.id, { state: 'error', error: 'track or album was deleted', at: Date.now() }); fail++; continue; }
+        const tk = p?.tracks?.find((x) => x.id === job.trackId);
+        if (!tk) { setJob(job.id, { state: 'error', error: 'track or album was deleted', at: Date.now() }); fail++; continue; }
         try {
           if (!(await canWriteQuietly(dir))) throw new Error('Backup folder is locked — click the folder chip to unlock, then retry.');
           const folder = async () => { const now = await freshProject(p.id); if (!now) throw new Error('album was deleted'); return albumFolderPath(now, groupsRef.current); };
-          const save = async (title, clipId, blob, ext = extOf(blob.type, t.fileName)) => { const name = `${sanitizeFilename(title || 'Track')}_${clipId.slice(-5)}.${ext}`; await writeToDir(dir, `${await folder()}/${name}`, blob); return name; };
+          const save = async (title, clipId, blob, ext = extOf(blob.type, tk.fileName)) => { const name = `${sanitizeFilename(title || 'Track')}_${clipId.slice(-5)}.${ext}`; await writeToDir(dir, `${await folder()}/${name}`, blob); return name; };
           const portal = () => { try { const key = 'portal-activity', a = JSON.parse(localStorage.getItem(key) || '[]'); a.push([Math.round(Date.now() / 1000), 'MusicStudio', 'compose', 1]); localStorage.setItem(key, JSON.stringify(a.slice(-2000))); } catch { /* quota */ } };
           let twin = null;
           const qcOf = async (blob, expectSec) => { try { const ab = await decodeBlob(blob); const ch = [ab.getChannelData(0), ...(ab.numberOfChannels > 1 ? [ab.getChannelData(1)] : [])]; const m = qcMetrics(ch, ab.sampleRate); return { ...qcGrade(m, expectSec), ...m }; } catch { return null; } };
           // A new take becomes the track's audio; whatever was there is kept as a take.
-          const adopt = (take) => updateProjectById(p.id, (pp) => ({ ...pp, tracks: (pp.tracks || []).map((x) => (x.id !== t.id ? x : { ...x, ...takeToRep(take), status: 'ready', error: '', takes: [...(x.takes || []), ...(x.clipId ? [repAsTake(x)] : [])] })) }));
+          const adopt = (take) => updateProjectById(p.id, (pp) => ({ ...pp, tracks: (pp.tracks || []).map((x) => (x.id !== tk.id ? x : { ...x, ...takeToRep(take), status: 'ready', error: '', takes: [...(x.takes || []), ...(x.clipId ? [repAsTake(x)] : [])] })) }));
           if (job.kind === 'stems') {
             setJob(job.id, { note: 'separating stems…' });
-            const src = await getClip(t.clipId); if (!src) throw new Error('audio not found');
-            const files = await separateStems(src, job.variation || 'six_stems_v1', apiKey, t.backupFile || 'song.mp3');
-            const sub = `stems/${sanitizeFilename(t.title || 'Track')}_${(t.clipId || '').slice(-5)}`;
+            const src = await getClip(tk.clipId); if (!src) throw new Error('audio not found');
+            const files = await separateStems(src, job.variation || 'six_stems_v1', apiKey, tk.backupFile || 'song.mp3');
+            const sub = `stems/${sanitizeFilename(tk.title || 'Track')}_${(tk.clipId || '').slice(-5)}`;
             const stems = [];
             for (const f of files) {
               const clipId = uid('clip_'); await putClip(clipId, f.blob);
@@ -984,39 +984,39 @@ export default function App() {
               await writeToDir(dir, `${await folder()}/${file}`, f.blob);
               stems.push({ name: f.name.replace(/\.[^.]+$/, ''), clipId, file, durationMs: await clipDurationMs(f.blob), mime: f.blob.type, sizeBytes: f.blob.size });
             }
-            for (const old of t.stems || []) if (old.clipId) await deleteClip(old.clipId);
-            await patchTrack(p.id, t.id, { stems });
+            for (const old of tk.stems || []) if (old.clipId) await deleteClip(old.clipId);
+            await patchTrack(p.id, tk.id, { stems });
           } else if (job.kind === 'video') {
-            await patchTrack(p.id, t.id, { status: 'gen' });
+            await patchTrack(p.id, tk.id, { status: 'gen' });
             const v = job.video || {};
-            const { blob, songId } = await videoToMusic({ videos: job.videos || [], description: t.prompt || '', tags: v.tags || [], model: musicModelFor(t), addSfx: !!v.addSfx, useAudioRef: !!v.useAudioRef }, apiKey);
+            const { blob, songId } = await videoToMusic({ videos: job.videos || [], description: tk.prompt || '', tags: v.tags || [], model: musicModelFor(tk), addSfx: !!v.addSfx, useAudioRef: !!v.useAudioRef }, apiKey);
             portal();
             const clipId = uid('clip_'); await putClip(clipId, blob);
             const durationMs = await clipDurationMs(blob);
-            await adopt({ id: uid('k_'), clipId, durationMs, sizeBytes: blob.size, mime: blob.type, backupFile: await save(t.title, clipId, blob), songId, qc: await qcOf(blob, 0), at: Date.now(), model: musicModelFor(t), meta: { title: '', description: `scored from ${(job.videos || []).map((x) => x.name).join(', ')}`, genres: [], languages: [] } });
-          } else if (t.type === 'sfx') {
-            await patchTrack(p.id, t.id, { status: 'gen' });
-            const blob = await soundEffect({ text: t.text, durationSec: t.sfxDuration || null, loop: !!t.loop, promptInfluence: t.promptInfluence ?? 0.3, model: t.sfxModel || SFX_MODELS[0].id }, apiKey);
+            await adopt({ id: uid('k_'), clipId, durationMs, sizeBytes: blob.size, mime: blob.type, backupFile: await save(tk.title, clipId, blob), songId, qc: await qcOf(blob, 0), at: Date.now(), model: musicModelFor(tk), meta: { title: '', description: `scored from ${(job.videos || []).map((x) => x.name).join(', ')}`, genres: [], languages: [] } });
+          } else if (tk.type === 'sfx') {
+            await patchTrack(p.id, tk.id, { status: 'gen' });
+            const blob = await soundEffect({ text: tk.text, durationSec: tk.sfxDuration || null, loop: !!tk.loop, promptInfluence: tk.promptInfluence ?? 0.3, model: tk.sfxModel || SFX_MODELS[0].id }, apiKey);
             portal();
             const clipId = uid('clip_'); await putClip(clipId, blob);
-            await adopt({ id: uid('k_'), clipId, durationMs: await clipDurationMs(blob), sizeBytes: blob.size, mime: blob.type, backupFile: await save(t.title, clipId, blob), qc: await qcOf(blob, 0), at: Date.now(), model: t.sfxModel || SFX_MODELS[0].id });
-          } else if (t.type === 'music') {
+            await adopt({ id: uid('k_'), clipId, durationMs: await clipDurationMs(blob), sizeBytes: blob.size, mime: blob.type, backupFile: await save(tk.title, clipId, blob), qc: await qcOf(blob, 0), at: Date.now(), model: tk.sfxModel || SFX_MODELS[0].id });
+          } else if (tk.type === 'music') {
             // Takes: N generations (each its own seed), quality-checked; the best becomes the track,
             // the rest — and the previous audio, if any — stack under it. Nothing is overwritten.
-            const n = job.plan ? 1 : Math.max(1, Math.min(4, t.takesN || prefs.takes || 1));
-            const model = musicModelFor(t), takes = [];
+            const n = job.plan ? 1 : Math.max(1, Math.min(4, tk.takesN || prefs.takes || 1));
+            const model = musicModelFor(tk), takes = [];
             for (let i = 0; i < n; i++) {
               setJob(job.id, { note: n > 1 ? `take ${i + 1}/${n}` : '' });
-              await patchTrack(p.id, t.id, { status: 'gen' });
-              const seed = t.lockSeed && Number.isInteger(t.seed) && i === 0 ? t.seed : Math.floor(Math.random() * 2147483647);
-              const body = composeBody(t, { model, seed, phonetic: t.phonetic ?? !!prefs.phoneticNames, c2pa: !!prefs.c2pa, finetuneId: t.finetuneId || '', finetuneStrength: t.finetuneStrength ?? 1, plan: job.plan || null });
+              await patchTrack(p.id, tk.id, { status: 'gen' });
+              const seed = tk.lockSeed && Number.isInteger(tk.seed) && i === 0 ? tk.seed : Math.floor(Math.random() * 2147483647);
+              const body = composeBody(tk, { model, seed, phonetic: tk.phonetic ?? !!prefs.phoneticNames, c2pa: !!prefs.c2pa, finetuneId: tk.finetuneId || '', finetuneStrength: tk.finetuneStrength ?? 1, plan: job.plan || null });
               const { blob, songId, meta } = await composeDetailed(body, apiKey);
               portal();
               const clipId = uid('clip_'); await putClip(clipId, blob);
               const durationMs = await clipDurationMs(blob);
               const qc = await qcOf(blob, (body.music_length_ms || planMs(body.composition_plan)) / 1000);
               const sm = meta.song_metadata || {};
-              const title = (!t.title || /^Track \d+$/.test(t.title)) && sm.title ? sm.title : t.title;
+              const title = (!tk.title || /^Track \d+$/.test(tk.title)) && sm.title ? sm.title : tk.title;
               const backupFile = await save(title, clipId, blob);
               const lrc = meta.words_timestamps?.length ? lrcFromWords(meta.words_timestamps, { title, artist: p.artist || '', album: p.title || '' }) : '';
               if (lrc) await writeToDir(dir, `${await folder()}/${backupFile.replace(/\.[^.]+$/, '')}.lrc`, new Blob([lrc], { type: 'text/plain' })).catch(() => {});
@@ -1024,26 +1024,26 @@ export default function App() {
             }
             const best = job.plan ? takes[0] : takes.reduce((x, y) => ((y.qc?.score ?? -1) > (x.qc?.score ?? -1) ? y : x));
             await updateProjectById(p.id, (pp) => ({ ...pp, tracks: (pp.tracks || []).map((x) => {
-              if (x.id !== t.id) return x;
+              if (x.id !== tk.id) return x;
               const prev = x.clipId ? [repAsTake(x)] : [];
               const title = (!x.title || /^Track \d+$/.test(x.title)) && best.meta.title ? best.meta.title : x.title;
               return { ...x, ...takeToRep(best), title, status: 'ready', error: '', takes: [...(x.takes || []), ...prev, ...takes.filter((k) => k !== best)] };
             }) }));
           } else {
-            const k = trackKey(t);
-            twin = k && p.tracks.find((x) => x.id !== t.id && x.clipId && trackKey(x) === k);
+            const k = trackKey(tk);
+            twin = k && p.tracks.find((x) => x.id !== tk.id && x.clipId && trackKey(x) === k);
             let blob = twin ? await getClip(twin.clipId) : null;
-            if (!blob) { await patchTrack(p.id, t.id, { status: 'gen' }); blob = await tts({ text: t.text, voiceId: t.voiceId, model: t.ttsModel, apiKey }); portal(); }
-            const clipId = t.clipId || uid('clip_'); // a regenerated line overwrites its own clip + file (same name)
+            if (!blob) { await patchTrack(p.id, tk.id, { status: 'gen' }); blob = await tts({ text: tk.text, voiceId: tk.voiceId, model: tk.ttsModel, apiKey }); portal(); }
+            const clipId = tk.clipId || uid('clip_'); // a regenerated line overwrites its own clip + file (same name)
             await putClip(clipId, blob);
             const durationMs = await clipDurationMs(blob);
-            const backupFile = await save(t.title, clipId, blob);
-            await patchTrack(p.id, t.id, { status: 'ready', clipId, durationMs, sizeBytes: blob.size, mime: blob.type, error: '', backupFile });
+            const backupFile = await save(tk.title, clipId, blob);
+            await patchTrack(p.id, tk.id, { status: 'ready', clipId, durationMs, sizeBytes: blob.size, mime: blob.type, error: '', backupFile });
           }
           const saved = await freshProject(p.id); if (saved) writeSkeleton(saved);
           setJob(job.id, { state: twin ? 'reused' : 'done', at: Date.now(), note: '' }); ok++;
         } catch (e) {
-          if (job.kind !== 'stems') await patchTrack(p.id, t.id, { status: 'error', error: e.message || String(e) });
+          if (job.kind !== 'stems') await patchTrack(p.id, tk.id, { status: 'error', error: e.message || String(e) });
           setJob(job.id, { state: 'error', error: e.message || String(e), at: Date.now() }); fail++;
         }
       }
@@ -1056,29 +1056,29 @@ export default function App() {
     }
   }
   // Takes: delete some (clip + file + synced lyrics); the take in use is never among them.
-  async function deleteTakes(t, ids) {
-    const kill = (t.takes || []).filter((k) => ids.includes(k.id));
+  async function deleteTakes(tk, ids) {
+    const kill = (tk.takes || []).filter((k) => ids.includes(k.id));
     for (const k of kill) {
       if (k.clipId) await deleteClip(k.clipId);
       if (dir && k.backupFile) for (const f of [k.backupFile, k.backupFile.replace(/\.[^.]+$/, '.lrc')]) await fsOp((d) => removeFromDir(d, `${albumPath(activeRef.current)}/${f}`));
     }
-    await patchTrack(activeRef.current.id, t.id, { takes: (t.takes || []).filter((k) => !ids.includes(k.id)) });
+    await patchTrack(activeRef.current.id, tk.id, { takes: (tk.takes || []).filter((k) => !ids.includes(k.id)) });
     showToast(`🗑 ${kill.length} take${kill.length === 1 ? '' : 's'} deleted`);
   }
   // Redo one section: keep the song outside the range (ElevenLabs reuses the stored audio) and
   // regenerate only the middle. Needs the song stored at ElevenLabs — older audio is uploaded first.
-  async function inpaintTrack(t, { from, to, text, styles }) {
+  async function inpaintTrack(tk, { from, to, text, styles }) {
     const projectId = activeRef.current?.id; if (!projectId) return;
     try {
-      let songId = t.songId;
+      let songId = tk.songId;
       if (!songId) {
         showToast('⇪ Uploading the current audio to ElevenLabs…');
-        const blob = await getClip(t.clipId); if (!blob) throw new Error('audio not found');
-        songId = (await uploadSong(blob, { withTimestamps: false, name: t.backupFile || 'song.mp3' }, apiKey)).songId;
-        await patchTrack(projectId, t.id, { songId });
+        const blob = await getClip(tk.clipId); if (!blob) throw new Error('audio not found');
+        songId = (await uploadSong(blob, { withTimestamps: false, name: tk.backupFile || 'song.mp3' }, apiKey)).songId;
+        await patchTrack(projectId, tk.id, { songId });
       }
-      const plan = inpaintPlan(songId, t.durationMs, from * 1000, to * 1000, { text: text || '', positive_styles: String(styles || '').split(',').map((x) => x.trim()).filter(Boolean), negative_styles: [], context_adherence: 'high' });
-      enqueue(projectId, [t.id], { plan });
+      const plan = inpaintPlan(songId, tk.durationMs, from * 1000, to * 1000, { text: text || '', positive_styles: String(styles || '').split(',').map((x) => x.trim()).filter(Boolean), negative_styles: [], context_adherence: 'high' });
+      enqueue(projectId, [tk.id], { plan });
     } catch (e) { showToast('Redo failed: ' + (e.message || e)); }
   }
   // 🎧 New tracks from an existing song's reverse-engineered plan (see FromSong).
@@ -1105,17 +1105,17 @@ export default function App() {
       const saved = await freshProject(projectId); if (saved) writeSkeleton(saved);
       setModal(null);
       showToast(`🎧 Added ${add.length + (o.addOriginal ? 1 : 0)} track(s) from “${name}”`);
-      if (o.generate && add.length) enqueue(projectId, add.map((t) => t.id));
+      if (o.generate && add.length) enqueue(projectId, add.map((tk) => tk.id));
     } catch (e) { showToast('From song failed: ' + (e.message || e)); }
     setWizBusy('');
   }
   // 🎬 A music track scored from video clips (videos live only in the queue job).
   async function createFromVideo(o) {
     const projectId = activeRef.current?.id; if (!projectId) return;
-    const t = { id: uid('t_'), type: 'music', title: o.videos[0].name.replace(/\.[^.]+$/, '') + ' (score)', prompt: [o.description, o.tags.join(', ')].filter(Boolean).join(' — '), lengthMs: 60000, ...newTrackModel(prefs), instrumental: true, status: 'idle', gain: 1 };
-    await updateProjectById(projectId, (pp) => ({ ...pp, tracks: [...(pp.tracks || []), t] }));
+    const tk = { id: uid('t_'), type: 'music', title: o.videos[0].name.replace(/\.[^.]+$/, '') + ' (score)', prompt: [o.description, o.tags.join(', ')].filter(Boolean).join(' — '), lengthMs: 60000, ...newTrackModel(prefs), instrumental: true, status: 'idle', gain: 1 };
+    await updateProjectById(projectId, (pp) => ({ ...pp, tracks: [...(pp.tracks || []), tk] }));
     setModal(null);
-    enqueue(projectId, [t.id], { kind: 'video', videos: o.videos, video: { tags: o.tags, addSfx: o.addSfx, useAudioRef: o.useAudioRef } });
+    enqueue(projectId, [tk.id], { kind: 'video', videos: o.videos, video: { tags: o.tags, addSfx: o.addSfx, useAudioRef: o.useAudioRef } });
   }
   const activeJobs = jobs.filter((j) => j.state === 'queued' || j.state === 'running');
 
@@ -1130,7 +1130,7 @@ export default function App() {
     catch (e) { alert('Restore failed: ' + (e.message || e)); }
   }
 
-  const trackInfo = useMemo(() => { const m = new Map(); for (const p of projects) for (const t of p.tracks || []) m.set(t.id, { title: t.title, album: p.title || 'Album', albumId: p.id }); return m; }, [projects]);
+  const trackInfo = useMemo(() => { const m = new Map(); for (const p of projects) for (const tk of p.tracks || []) m.set(tk.id, { title: tk.title, album: p.title || 'Album', albumId: p.id }); return m; }, [projects]);
   const groupView = groupViewId ? groups.find((g) => g.id === groupViewId) : null;
   const playlist = playlistId ? playlists.find((p) => p.id === playlistId) : null;
 
@@ -1189,7 +1189,7 @@ export default function App() {
                 group={groups.find((g) => g.id === active.parentId)} onTheme={setGroupTheme} coverUrl={coverUrl}
                 updateProject={updateProject} backupClip={backupClip} writeSkeleton={writeSkeleton}
                 onSetCover={setCover} onClearCover={clearCover} onDuplicateAlbum={() => duplicateAlbum(active)} onCopyPath={() => copyAlbumPath(active)}
-                onExport={() => setModal('export')} onMetadata={() => setModal('metadata')} onAttachments={() => { setAttGroupId(null); setModal('attachments'); }} onLoadSkeleton={loadSkeleton} onScanFolder={scanAlbumFolder} onListAlbumAudio={listAlbumAudio} onLinkFile={linkTrackFile} onGenerate={(ids) => enqueue(active.id, ids)} onUpload={(files) => uploadTracks(active.id, files)} onDeleteTakes={deleteTakes} onInpaint={inpaintTrack} finetunes={finetunes} onFromSong={() => setModal('fromSong')} onFromVideo={() => setModal('fromVideo')} onStems={(t, variation) => enqueue(active.id, [t.id], { kind: 'stems', variation })} queued={activeJobs.filter((j) => j.projectId === active.id).length}
+                onExport={() => setModal('export')} onMetadata={() => setModal('metadata')} onAttachments={() => { setAttGroupId(null); setModal('attachments'); }} onLoadSkeleton={loadSkeleton} onScanFolder={scanAlbumFolder} onListAlbumAudio={listAlbumAudio} onLinkFile={linkTrackFile} onGenerate={(ids) => enqueue(active.id, ids)} onUpload={(files) => uploadTracks(active.id, files)} onDeleteTakes={deleteTakes} onInpaint={inpaintTrack} finetunes={finetunes} onFromSong={() => setModal('fromSong')} onFromVideo={() => setModal('fromVideo')} onStems={(tk, variation) => enqueue(active.id, [tk.id], { kind: 'stems', variation })} queued={activeJobs.filter((j) => j.projectId === active.id).length}
                 playlists={playlists} onAddToPlaylist={addTracksToPlaylist} onPublish={() => publishOne(active)} publishName={pubDir?.name} />
             : <div className="empty" style={{ marginTop: 40 }}>Select an album on the left, or create one.<br />{!apiKey && 'Add your ElevenLabs API key in Settings, and '}set a backup folder (outside the app) before generating.</div>}
         </div>

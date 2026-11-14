@@ -9,7 +9,7 @@ export default function PlaylistView({ playlist, projects, groups, onChange, onR
   const player = usePlayer();
   const [adding, setAdding] = useState(false);
   const tracks = resolvePlaylist(playlist, projects, groups);
-  const totalMs = tracks.reduce((s, t) => s + (t.durationMs || 0), 0);
+  const totalMs = tracks.reduce((s, tk) => s + (tk.durationMs || 0), 0);
 
   const set = (patch) => onChange({ ...playlist, ...patch });
   const setItems = (items) => set({ items });
@@ -56,15 +56,15 @@ export default function PlaylistView({ playlist, projects, groups, onChange, onR
       {adding && playlist.kind === 'static' && (
         <div className="track" style={{ maxHeight: 240, overflow: 'auto' }}>
           {projects.map((p) => {
-            const ready = (p.tracks || []).filter((t) => t.clipId);
+            const ready = (p.tracks || []).filter((tk) => tk.clipId);
             if (!ready.length) return null;
             return (
               <div key={p.id} style={{ marginBottom: 4 }}>
                 <div className="dim" style={{ fontSize: 12, fontWeight: 600 }}>{p.title || 'Untitled'}</div>
-                {ready.map((t) => (
-                  <div key={t.id} className="row" style={{ fontSize: 13, padding: '2px 0' }}>
-                    <span className="grow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
-                    <button className="mini" onClick={() => addItem(p.id, t.id)}>{inList(p.id, t.id) ? '＋ again' : '＋'}</button>
+                {ready.map((tk) => (
+                  <div key={tk.id} className="row" style={{ fontSize: 13, padding: '2px 0' }}>
+                    <span className="grow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tk.title}</span>
+                    <button className="mini" onClick={() => addItem(p.id, tk.id)}>{inList(p.id, tk.id) ? '＋ again' : '＋'}</button>
                   </div>
                 ))}
               </div>
@@ -77,26 +77,26 @@ export default function PlaylistView({ playlist, projects, groups, onChange, onR
       {playlist.kind === 'static'
         ? (playlist.items || []).map((it, i) => {
             const p = projects.find((x) => x.id === it.projectId);
-            const t = p?.tracks?.find((x) => x.id === it.trackId);
+            const tk = p?.tracks?.find((x) => x.id === it.trackId);
             return (
               <div key={i} className="row" style={{ padding: '4px 0', fontSize: 13, borderBottom: '1px solid var(--line)' }}>
                 <span className="dim" style={{ width: 22 }}>{i + 1}</span>
-                <span className="grow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t ? t.title : <span style={{ color: 'var(--bad)' }}>(missing)</span>}<span className="dim"> · {p?.title || '?'}</span></span>
-                {t?.clipId && <button className="mini" onClick={() => player.play(t, tracks)}>{player.playing === t.id ? (player.paused ? '▶' : '⏸') : '▶'}</button>}
+                <span className="grow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tk ? tk.title : <span style={{ color: 'var(--bad)' }}>(missing)</span>}<span className="dim"> · {p?.title || '?'}</span></span>
+                {tk?.clipId && <button className="mini" onClick={() => player.play(tk, tracks)}>{player.playing === tk.id ? (player.paused ? '▶' : '⏸') : '▶'}</button>}
                 <button className="mini" onClick={() => moveItem(i, -1)} disabled={i === 0}>▲</button>
                 <button className="mini" onClick={() => moveItem(i, 1)} disabled={i === (playlist.items.length - 1)}>▼</button>
                 <button className="mini danger" onClick={() => removeItem(i)}>✕</button>
               </div>
             );
           })
-        : tracks.map((t, i) => (
-            <div key={t.id + i} className="row" style={{ padding: '4px 0', fontSize: 13, borderBottom: '1px solid var(--line)' }}>
+        : tracks.map((tk, i) => (
+            <div key={tk.id + i} className="row" style={{ padding: '4px 0', fontSize: 13, borderBottom: '1px solid var(--line)' }}>
               <span className="dim" style={{ width: 22 }}>{i + 1}</span>
-              <span className={`badge ${t.type}`}>{t.type}</span>
-              <span className="grow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}<span className="dim"> · {t._album}</span></span>
-              <span className="dim" style={{ fontSize: 12 }}>{fmtDuration(t.durationMs)}</span>
-              <button className="mini" onClick={() => player.play(t, tracks)}>{player.playing === t.id ? (player.paused ? '▶' : '⏸') : '▶'}</button>
-              <button className="mini" onClick={() => onOpenAlbum(t._projectId)} title="Open album">›</button>
+              <span className={`badge ${tk.type}`}>{tk.type}</span>
+              <span className="grow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tk.title}<span className="dim"> · {tk._album}</span></span>
+              <span className="dim" style={{ fontSize: 12 }}>{fmtDuration(tk.durationMs)}</span>
+              <button className="mini" onClick={() => player.play(tk, tracks)}>{player.playing === tk.id ? (player.paused ? '▶' : '⏸') : '▶'}</button>
+              <button className="mini" onClick={() => onOpenAlbum(tk._projectId)} title="Open album">›</button>
             </div>
           ))}
       {!tracks.length && playlist.kind === 'dynamic' && <p className="note">No songs match this rule yet.</p>}

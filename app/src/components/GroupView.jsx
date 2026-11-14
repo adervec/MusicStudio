@@ -16,8 +16,8 @@ export default function GroupView({ group, groups, projects, onOpenAlbum, onCopy
 
   const ids = descendantIds(group.id, groups);
   const albums = projects.filter((p) => ids.has(p.parentId));
-  const allReady = albums.flatMap((a) => (a.tracks || []).filter((t) => t.clipId));
-  const totalMs = allReady.reduce((s, t) => s + (t.durationMs || 0), 0);
+  const allReady = albums.flatMap((a) => (a.tracks || []).filter((tk) => tk.clipId));
+  const totalMs = allReady.reduce((s, tk) => s + (tk.durationMs || 0), 0);
   const gaps = albums.reduce((s, a) => s + (a.tracks || []).filter(isGap).length, 0);
 
   return (
@@ -41,15 +41,15 @@ export default function GroupView({ group, groups, projects, onOpenAlbum, onCopy
           <div className="track-head">
             <span className="grow" style={{ fontWeight: 600, cursor: 'pointer' }} onClick={() => onOpenAlbum(a.id)} title="Open album">🎵 {a.title || 'Untitled'}</span>
             {(() => { const r = albumRating(a); return r.eff ? <span className="dim" style={{ fontSize: 12 }} title={r.mine ? 'your rating' : `from ${r.n} rated songs`}>{(Math.round(r.eff * 10) / 10)}★{r.mine ? '' : '*'}</span> : null; })()}
-            <span className="dim" style={{ fontSize: 12 }}>{(a.tracks || []).filter((t) => t.clipId).length}/{(a.tracks || []).length}</span>
+            <span className="dim" style={{ fontSize: 12 }}>{(a.tracks || []).filter((tk) => tk.clipId).length}/{(a.tracks || []).length}</span>
             <button className="mini" onClick={() => onOpenAlbum(a.id)}>Open ›</button>
           </div>
-          {(a.tracks || []).map((t) => (
-            <div key={t.id} className="row" style={{ padding: '3px 0', fontSize: 13 }}>
-              <span className={`badge ${t.type}`}>{t.type}</span>
-              <span className="grow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title || '(untitled)'}</span>
-              {t.clipId
-                ? <><span className="dim" style={{ fontSize: 12 }}>{fmtDuration(t.durationMs)}</span><button className="mini" onClick={() => player.play(t, allReady)}>{player.playing === t.id ? (player.paused ? '▶' : '⏸') : '▶'}</button></>
+          {(a.tracks || []).map((tk) => (
+            <div key={tk.id} className="row" style={{ padding: '3px 0', fontSize: 13 }}>
+              <span className={`badge ${tk.type}`}>{tk.type}</span>
+              <span className="grow" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tk.title || '(untitled)'}</span>
+              {tk.clipId
+                ? <><span className="dim" style={{ fontSize: 12 }}>{fmtDuration(tk.durationMs)}</span><button className="mini" onClick={() => player.play(tk, allReady)}>{player.playing === tk.id ? (player.paused ? '▶' : '⏸') : '▶'}</button></>
                 : <span className="dim" style={{ fontSize: 12, color: 'var(--warn)' }}>gap</span>}
             </div>
           ))}

@@ -11,8 +11,8 @@ export default function DeviceSync({ projects, groups, syncMap, deviceName, busy
     .map((p) => ({
       p,
       path: albumFolderPath(p, groups || []),
-      ready: (p.tracks || []).filter((t) => t.clipId).length,
-      ms: (p.tracks || []).reduce((s, t) => s + (t.clipId ? (t.durationMs || 0) : 0), 0),
+      ready: (p.tracks || []).filter((tk) => tk.clipId).length,
+      ms: (p.tracks || []).reduce((s, tk) => s + (tk.clipId ? (tk.durationMs || 0) : 0), 0),
     }))
     .sort((a, b) => a.path.localeCompare(b.path)), [projects, groups]);
   const toggle = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });

@@ -18,7 +18,7 @@ export default function CloudLibrary({ catalog, requests, busy, onSave, onRefres
     return (catalog?.albums || []).filter((a) => !needle
       || a.title.toLowerCase().includes(needle) || a.path.toLowerCase().includes(needle)
       || (a.description || '').toLowerCase().includes(needle)
-      || a.tracks.some((t) => (t.title || '').toLowerCase().includes(needle)));
+      || a.tracks.some((tk) => (tk.title || '').toLowerCase().includes(needle)));
   }, [catalog, q]);
 
   const toggle = (id) => { setWant((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; }); setDirty(true); };
@@ -86,13 +86,13 @@ export default function CloudLibrary({ catalog, requests, busy, onSave, onRefres
                     <p className="note dim">{Object.entries(a.meta).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join(' · ')}</p>
                   )}
                   <ol style={{ margin: '6px 0', paddingLeft: 22, fontSize: 13 }}>
-                    {a.tracks.map((t, i) => (
-                      <li key={i} style={{ marginBottom: 4, opacity: t.ready ? 1 : 0.55 }}>
-                        {t.fav ? '★ ' : ''}{t.title || <span className="dim">untitled</span>}
-                        {t.ms ? <span className="dim"> · {fmtDuration(t.ms)}</span> : null}
-                        {!t.ready && <span className="dim"> · not generated</span>}
-                        {safeUrl(t.url) && <> · <a href={safeUrl(t.url)} target="_blank" rel="noopener noreferrer">song page ↗</a></>}
-                        {t.prompt && <div className="dim" style={{ fontSize: 12, whiteSpace: 'pre-wrap' }}>{t.prompt}</div>}
+                    {a.tracks.map((tk, i) => (
+                      <li key={i} style={{ marginBottom: 4, opacity: tk.ready ? 1 : 0.55 }}>
+                        {tk.fav ? '★ ' : ''}{tk.title || <span className="dim">untitled</span>}
+                        {tk.ms ? <span className="dim"> · {fmtDuration(tk.ms)}</span> : null}
+                        {!tk.ready && <span className="dim"> · not generated</span>}
+                        {safeUrl(tk.url) && <> · <a href={safeUrl(tk.url)} target="_blank" rel="noopener noreferrer">song page ↗</a></>}
+                        {tk.prompt && <div className="dim" style={{ fontSize: 12, whiteSpace: 'pre-wrap' }}>{tk.prompt}</div>}
                       </li>
                     ))}
                   </ol>

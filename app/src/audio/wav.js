@@ -82,7 +82,7 @@ export function assembleAlbum(items, { gapMs = 800, crossfadeMs = 0, sampleRate 
   let end = 0;
   for (let i = 0; i < items.length; i++) {
     const [l, r] = items[i].channels; const n = l.length; const ov = ovAt(i); const start = end - ov;
-    for (let j = 0; j < ov; j++) { const t = (j + 1) / (ov + 1); L[start + j] = L[start + j] * (1 - t) + l[j] * t; R[start + j] = R[start + j] * (1 - t) + r[j] * t; }
+    for (let j = 0; j < ov; j++) { const tk = (j + 1) / (ov + 1); L[start + j] = L[start + j] * (1 - tk) + l[j] * tk; R[start + j] = R[start + j] * (1 - tk) + r[j] * tk; }
     for (let j = ov; j < n; j++) { L[start + j] = l[j]; R[start + j] = r[j]; }
     end = start + n + gap;
   }
@@ -148,8 +148,8 @@ export function buildId3v2(tags = {}) {
   add('TCOM', tags.composer); add('TPUB', tags.publisher); add('TCOP', tags.copyright);
   add('TBPM', tags.bpm); add('TLAN', tags.language); add('TIT1', tags.grouping);
   if (tags.comment) { // COMM (what Explorer shows as Comments): encoding, 'eng', empty description, text
-    const t = id3Text(String(tags.comment)), uni = t[0] === 0x01;
-    frames.push(frameBytes('COMM', concatBytes([new Uint8Array([t[0], 0x65, 0x6e, 0x67, ...(uni ? [0xff, 0xfe, 0, 0] : [0])]), t.subarray(1)])));
+    const tk = id3Text(String(tags.comment)), uni = tk[0] === 0x01;
+    frames.push(frameBytes('COMM', concatBytes([new Uint8Array([tk[0], 0x65, 0x6e, 0x67, ...(uni ? [0xff, 0xfe, 0, 0] : [0])]), tk.subarray(1)])));
   }
   if (tags.discNumber) add('TPOS', tags.discTotal ? `${tags.discNumber}/${tags.discTotal}` : tags.discNumber);
   if (tags.picture?.bytes?.length) { // APIC: encoding, mime\0, picture-type 0x03 (front), desc\0, data

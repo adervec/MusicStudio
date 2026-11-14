@@ -9,7 +9,7 @@ const r1 = (x) => (x == null ? null : Math.round(x * 10) / 10);
 
 // Album: mine = p.rating; calc = mean of its rated songs. Effective = mine ?? calc.
 export function albumRating(p) {
-  const rs = (p.tracks || []).map((t) => t.rating).filter((x) => x > 0);
+  const rs = (p.tracks || []).map((tk) => tk.rating).filter((x) => x > 0);
   const calc = mean(rs);
   return { mine: p.rating || null, calc: r1(calc), n: rs.length, eff: p.rating || calc };
 }
@@ -33,11 +33,11 @@ export function groupRatings(groups = [], projects = []) {
 }
 
 // Style tags of a track: its prompt's comma parts, its plan's styles, ElevenLabs' genres for it.
-export function styleTags(t, p = {}) {
+export function styleTags(tk, p = {}) {
   const tags = [
-    ...String(t.usePlan ? '' : t.prompt || '').split(/[,;\n]/),
-    ...(t.usePlan ? (t.plan?.chunks || []).flatMap((c) => c.positive_styles || []) : []),
-    ...(t.genMeta?.genres || []), p.meta?.genre || '',
+    ...String(tk.usePlan ? '' : tk.prompt || '').split(/[,;\n]/),
+    ...(tk.usePlan ? (tk.plan?.chunks || []).flatMap((c) => c.positive_styles || []) : []),
+    ...(tk.genMeta?.genres || []), p.meta?.genre || '',
   ].map((s) => s.trim().toLowerCase()).filter((s) => s && s.length <= 40);
   return [...new Set(tags)];
 }
@@ -47,11 +47,11 @@ const countTags = (lists) => { const m = new Map(); for (const l of lists) for (
 // don't rewrite the files.
 export function buildTaste(projects = [], groups = []) {
   const songs = [];
-  for (const p of projects) for (const t of p.tracks || []) {
-    songs.push({ album: p.title || 'Album', path: albumFolderPath(p, groups), title: t.title || '', type: t.type, rating: t.rating || 0, fav: !!t.fav,
-      prompt: t.usePlan ? '' : (t.prompt || ''), plan: t.usePlan ? (t.plan?.chunks || []).map((c) => (c.song_id ? '[kept audio]' : `${(c.text || '').split('\n')[0]} — ${(c.positive_styles || []).join(', ')}`)) : null,
-      lyrics: t.lyrics ? t.lyrics.slice(0, 400) : '', genres: t.genMeta?.genres || [], styles: styleTags(t, p),
-      notes: t.notes || '', likes: t.likes || [], dislikes: t.dislikes || [], takeNote: t.takeNote || '', model: t.genModel || t.model || '', seed: Number.isInteger(t.seed) ? t.seed : null });
+  for (const p of projects) for (const tk of p.tracks || []) {
+    songs.push({ album: p.title || 'Album', path: albumFolderPath(p, groups), title: tk.title || '', type: tk.type, rating: tk.rating || 0, fav: !!tk.fav,
+      prompt: tk.usePlan ? '' : (tk.prompt || ''), plan: tk.usePlan ? (tk.plan?.chunks || []).map((c) => (c.song_id ? '[kept audio]' : `${(c.text || '').split('\n')[0]} — ${(c.positive_styles || []).join(', ')}`)) : null,
+      lyrics: tk.lyrics ? tk.lyrics.slice(0, 400) : '', genres: tk.genMeta?.genres || [], styles: styleTags(tk, p),
+      notes: tk.notes || '', likes: tk.likes || [], dislikes: tk.dislikes || [], takeNote: tk.takeNote || '', model: tk.genModel || tk.model || '', seed: Number.isInteger(tk.seed) ? tk.seed : null });
   }
   const rated = songs.filter((s) => s.rating > 0);
   const top = songs.filter((s) => s.rating >= 4 || (s.fav && !s.rating)).sort((a, b) => b.rating - a.rating || a.title.localeCompare(b.title)).slice(0, 30);

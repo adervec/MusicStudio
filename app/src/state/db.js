@@ -48,7 +48,7 @@ export async function saveProject(project, { keepTime = false } = {}) {
 export async function deleteProject(id) {
   const db = await getDB();
   const p = await db.get('projects', id);
-  for (const t of p?.tracks || []) for (const c of [t.clipId, ...(t.takes || []).map((k) => k.clipId)]) if (c) await db.delete('clips', c);
+  for (const tk of p?.tracks || []) for (const c of [tk.clipId, ...(tk.takes || []).map((k) => k.clipId)]) if (c) await db.delete('clips', c);
   for (const a of p?.attachments || []) await db.delete('attachments', a.id);
   if (p?.cover?.id) await db.delete('clips', p.cover.id);
   await db.delete('projects', id);

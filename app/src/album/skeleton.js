@@ -74,16 +74,16 @@ export function buildAlbumJson(project) {
     cover: project.cover?.file || null, // relative path of the album cover image, if any
     rating: project.rating || 0, notes: project.notes || '', likes: project.likes || [], dislikes: project.dislikes || [], // human-owned
     meta: { ...defaultMeta(), ...(project.meta || {}) },
-    tracks: (project.tracks || []).map((t) => ({
-      id: t.id, type: t.type, title: t.title || '',
-      prompt: t.prompt || '', lengthSec: Math.round((t.lengthMs || 60000) / 1000),
-      model: t.modelPinned && t.model ? t.model : 'latest', instrumental: !!t.instrumental, // app-managed
-      text: t.text || '', voiceId: t.voiceId || '', voiceName: t.voiceName || '',
-      gain: t.gain ?? 1, sourceUrl: t.sourceUrl || '',
-      lyrics: t.lyrics || '', usePlan: !!t.usePlan, plan: t.plan || null, respectDurations: t.respectDurations !== false, takesN: t.takesN || 1,
-      seed: Number.isInteger(t.seed) ? t.seed : null, takes: (t.takes || []).length, // app-managed
-      rating: t.rating || 0, notes: t.notes || '', likes: t.likes || [], dislikes: t.dislikes || [], // human-owned
-      generated: !!t.clipId, file: t.backupFile || null, // written by the app; agents leave these alone
+    tracks: (project.tracks || []).map((tk) => ({
+      id: tk.id, type: tk.type, title: tk.title || '',
+      prompt: tk.prompt || '', lengthSec: Math.round((tk.lengthMs || 60000) / 1000),
+      model: tk.modelPinned && tk.model ? tk.model : 'latest', instrumental: !!tk.instrumental, // app-managed
+      text: tk.text || '', voiceId: tk.voiceId || '', voiceName: tk.voiceName || '',
+      gain: tk.gain ?? 1, sourceUrl: tk.sourceUrl || '',
+      lyrics: tk.lyrics || '', usePlan: !!tk.usePlan, plan: tk.plan || null, respectDurations: tk.respectDurations !== false, takesN: tk.takesN || 1,
+      seed: Number.isInteger(tk.seed) ? tk.seed : null, takes: (tk.takes || []).length, // app-managed
+      rating: tk.rating || 0, notes: tk.notes || '', likes: tk.likes || [], dislikes: tk.dislikes || [], // human-owned
+      generated: !!tk.clipId, file: tk.backupFile || null, // written by the app; agents leave these alone
     })),
     // Reference material for the agent — style guides, inspirations, notes. Files live in attachments/.
     attachments: (project.attachments || []).map((a) => ({ name: a.name, kind: a.kind, source: a.source || 'hand', file: a.file })),
@@ -93,7 +93,7 @@ export function buildAlbumJson(project) {
 // Merge an agent-edited album.json back into a project, preserving already-generated audio by track id.
 export function mergeSkeleton(project, json) {
   if (!json || !Array.isArray(json.tracks)) throw new Error('album.json has no tracks[] array');
-  const prevById = new Map((project.tracks || []).map((t) => [t.id, t]));
+  const prevById = new Map((project.tracks || []).map((tk) => [tk.id, tk]));
   const tracks = json.tracks.map((j) => {
     const prev = prevById.get(j.id) || {};
     return {
@@ -134,24 +134,24 @@ export function mergeSkeleton(project, json) {
 }
 
 // A track is a "generation gap" if it's a song/dialog with the input it needs but no audio yet.
-export function isGap(t) {
-  if (t.type === 'sfx') return !t.clipId && !!(t.text && t.text.trim());
-  return (t.type === 'music' || t.type === 'dialog') && !t.clipId
-    && (t.type === 'music' ? !!((t.usePlan && t.plan?.chunks?.length) || (t.prompt && t.prompt.trim())) : !!(t.text && t.text.trim() && t.voiceId));
+export function isGap(tk) {
+  if (tk.type === 'sfx') return !tk.clipId && !!(tk.text && tk.text.trim());
+  return (tk.type === 'music' || tk.type === 'dialog') && !tk.clipId
+    && (tk.type === 'music' ? !!((tk.usePlan && tk.plan?.chunks?.length) || (tk.prompt && tk.prompt.trim())) : !!(tk.text && tk.text.trim() && tk.voiceId));
 }
 export function countGaps(project) { return (project?.tracks || []).filter(isGap).length; }
 
 // Content key for dedup: songs by prompt, dialog by voice+text (normalized). null when empty/upload.
-export function trackKey(t) {
+export function trackKey(tk) {
   const norm = (s) => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
-  if (t.type === 'music') { const p = norm(t.prompt); return p ? 'm:' + p : null; }
-  if (t.type === 'dialog') { const x = norm(t.text); return x ? `d:${t.voiceId || ''}:${x}` : null; }
+  if (tk.type === 'music') { const p = norm(tk.prompt); return p ? 'm:' + p : null; }
+  if (tk.type === 'dialog') { const x = norm(tk.text); return x ? `d:${tk.voiceId || ''}:${x}` : null; }
   return null;
 }
 // Ids of tracks that duplicate an earlier track's content (the 2nd+ occurrence of a key).
 export function duplicateIds(tracks) {
   const seen = new Set(), dups = new Set();
-  for (const t of tracks || []) { const k = trackKey(t); if (!k) continue; if (seen.has(k)) dups.add(t.id); else seen.add(k); }
+  for (const tk of tracks || []) { const k = trackKey(tk); if (!k) continue; if (seen.has(k)) dups.add(tk.id); else seen.add(k); }
   return dups;
 }
 

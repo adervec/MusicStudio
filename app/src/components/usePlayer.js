@@ -10,7 +10,7 @@ const Ctx = createContext(null);
 export const usePlayer = () => useContext(Ctx);
 
 const shuffled = (arr) => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-const ready = (list) => (list || []).filter((t) => t?.clipId);
+const ready = (list) => (list || []).filter((tk) => tk?.clipId);
 
 export function PlayerProvider({ children }) {
   const audioRef = useRef(null), urlRef = useRef(null);
@@ -48,15 +48,15 @@ export function PlayerProvider({ children }) {
   }, [playing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load(i) {
-    const q = queueRef.current, t = q[i], a = audioRef.current;
-    if (!t || !a) return;
-    setI(i); setPlaying(t.id); setCur(0);
-    const blob = await getClip(t.clipId);
+    const q = queueRef.current, tk = q[i], a = audioRef.current;
+    if (!tk || !a) return;
+    setI(i); setPlaying(tk.id); setCur(0);
+    const blob = await getClip(tk.clipId);
     if (indexRef.current !== i) return; // another load won the race
     if (!blob) { next(true); return; } // clip gone — skip it
     if (urlRef.current) URL.revokeObjectURL(urlRef.current);
     urlRef.current = URL.createObjectURL(blob);
-    a.src = urlRef.current; a.volume = Math.max(0, Math.min(1, t.gain ?? 1));
+    a.src = urlRef.current; a.volume = Math.max(0, Math.min(1, tk.gain ?? 1));
     try { await a.play(); setPaused(false); } catch { setPaused(true); }
   }
   function stop() { const a = audioRef.current; if (a) a.pause(); setQ([]); setI(-1); setPlaying(null); setPaused(false); origRef.current = null; }
@@ -72,10 +72,10 @@ export function PlayerProvider({ children }) {
     if (shuffleRef.current) { origRef.current = r; setQ([r[s], ...shuffled(r.filter((_, i) => i !== s))]); load(0); }
     else { origRef.current = null; setQ(r); load(s); }
   }
-  function play(t, list) {
-    if (playing === t.id) return togglePause();
-    const r = ready(list?.length ? list : [t]);
-    playQueue(r, Math.max(0, r.findIndex((x) => x.id === t.id)));
+  function play(tk, list) {
+    if (playing === tk.id) return togglePause();
+    const r = ready(list?.length ? list : [tk]);
+    playQueue(r, Math.max(0, r.findIndex((x) => x.id === tk.id)));
   }
   function next(auto = false) {
     let i = indexRef.current + 1;

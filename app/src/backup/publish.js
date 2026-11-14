@@ -7,36 +7,36 @@ import { trackTags } from '../album/skeleton.js';
 import { writeToDir, ensureWritable, listFiles, removeFromDir } from './fs.js';
 
 const extFromName = (n) => n?.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase();
-const editsOf = (t) => ({ trimStartMs: t.trimStartMs || 0, trimEndMs: t.trimEndMs || 0, fadeInMs: t.fadeInMs || 0, fadeOutMs: t.fadeOutMs || 0, gain: t.gain ?? 1 });
-const hasEdits = (t) => !!(t.trimStartMs || t.trimEndMs || t.fadeInMs || t.fadeOutMs) || (t.gain ?? 1) !== 1;
+const editsOf = (tk) => ({ trimStartMs: tk.trimStartMs || 0, trimEndMs: tk.trimEndMs || 0, fadeInMs: tk.fadeInMs || 0, fadeOutMs: tk.fadeOutMs || 0, gain: tk.gain ?? 1 });
+const hasEdits = (tk) => !!(tk.trimStartMs || tk.trimEndMs || tk.fadeInMs || tk.fadeOutMs) || (tk.gain ?? 1) !== 1;
 const MIME = { mp3: 'audio/mpeg', wav: 'audio/wav' };
 export const mimeOf = (ext) => MIME[ext] || 'application/octet-stream';
 // A published file's extension: edits render to WAV; otherwise the source's own format.
-export const publishExt = (t, blobType = t.mime) => (hasEdits(t) ? 'wav' : extFromName(t.fileName) || (blobType === 'audio/wav' ? 'wav' : 'mp3'));
+export const publishExt = (tk, blobType = tk.mime) => (hasEdits(tk) ? 'wav' : extFromName(tk.fileName) || (blobType === 'audio/wav' ? 'wav' : 'mp3'));
 // What changes a file's *audio* (vs only its tags): which clip, its size, and the edits.
-const audioKey = (t) => JSON.stringify([t.clipId, t.sizeBytes || 0, t.durationMs || 0, editsOf(t)]);
+const audioKey = (tk) => JSON.stringify([tk.clipId, tk.sizeBytes || 0, tk.durationMs || 0, editsOf(tk)]);
 const tagSig = (project, tags) => JSON.stringify([tags, project.cover?.id || null]);
 
 // Master files (the app's own copies in the backup folder): numbered by position in the album, the
 // way the app lists them. → [{ trackId, file, ext, tags, sig }]
 export function masterTargets(project) {
   const all = project.tracks || [];
-  return all.flatMap((t, i) => {
-    const ext = extFromName(t.backupFile);
-    if (!t.clipId || !t.backupFile || !MIME[ext]) return [];
-    const tags = trackTags(project, t.title || `Track ${i + 1}`, i, all.length);
-    return [{ trackId: t.id, file: t.backupFile, ext, tags, sig: tagSig(project, tags) + audioKey(t) }];
+  return all.flatMap((tk, i) => {
+    const ext = extFromName(tk.backupFile);
+    if (!tk.clipId || !tk.backupFile || !MIME[ext]) return [];
+    const tags = trackTags(project, tk.title || `Track ${i + 1}`, i, all.length);
+    return [{ trackId: tk.id, file: tk.backupFile, ext, tags, sig: tagSig(project, tags) + audioKey(tk) }];
   });
 }
 
 // Published copies: ready tracks only, numbered like their filenames. → { folder, files: [{ trackId, name, ext, tags, sig, audio }] }
 export function publishTargets(project) {
-  const ready = (project.tracks || []).filter((t) => t.clipId);
+  const ready = (project.tracks || []).filter((tk) => tk.clipId);
   return {
     folder: sanitizeFilename(project.title || 'Album'),
-    files: ready.map((t, i) => {
-      const title = t.title || `Track ${i + 1}`, ext = publishExt(t), tags = trackTags(project, title, i, ready.length);
-      return { trackId: t.id, name: trackFileName(i, ready.length, title, ext), ext, tags, sig: tagSig(project, tags), audio: audioKey(t) };
+    files: ready.map((tk, i) => {
+      const title = tk.title || `Track ${i + 1}`, ext = publishExt(tk), tags = trackTags(project, title, i, ready.length);
+      return { trackId: tk.id, name: trackFileName(i, ready.length, title, ext), ext, tags, sig: tagSig(project, tags), audio: audioKey(tk) };
     }),
   };
 }
@@ -58,19 +58,19 @@ export async function retagBlob(blob, ext, tags) {
 // Render one ready track to its final export file: original audio when unedited, else edits rendered
 // to WAV — either way tagged (ID3 / RIFF INFO + id3 chunk, cover embedded). ponytail: no MP3 encoder in
 // the browser — WAV sources stay WAV; add an encoder dep only if phone storage becomes a real problem.
-export async function renderTrackFile(project, t, i, n, picture) {
-  const blob = await getClip(t.clipId);
-  const title = t.title || `Track ${i + 1}`;
-  const ext = publishExt(t, blob?.type);
+export async function renderTrackFile(project, tk, i, n, picture) {
+  const blob = await getClip(tk.clipId);
+  const title = tk.title || `Track ${i + 1}`;
+  const ext = publishExt(tk, blob?.type);
   const tags = { ...trackTags(project, title, i, n), picture };
-  const src = hasEdits(t) ? new Blob([encodeWav(applyEdits(bufferToStereo(await decodeBlob(blob)), 44100, editsOf(t)), 44100)], { type: 'audio/wav' }) : blob;
-  return { name: trackFileName(i, n, title, ext), title, out: await retagBlob(src, ext, tags), secs: Math.round((t.durationMs || 0) / 1000) };
+  const src = hasEdits(tk) ? new Blob([encodeWav(applyEdits(bufferToStereo(await decodeBlob(blob)), 44100, editsOf(tk)), 44100)], { type: 'audio/wav' }) : blob;
+  return { name: trackFileName(i, n, title, ext), title, out: await retagBlob(src, ext, tags), secs: Math.round((tk.durationMs || 0) / 1000) };
 }
 
 // Returns the number of tracks written (0 = nothing ready, album skipped). Files left over from an
 // earlier publish of this album (renamed/removed tracks) are deleted from its folder.
 export async function publishAlbum(project, dir, onProgress = () => {}) {
-  const ready = (project.tracks || []).filter((t) => t.clipId);
+  const ready = (project.tracks || []).filter((tk) => tk.clipId);
   if (!ready.length) return 0;
   if (!(await ensureWritable(dir))) throw new Error('Publish folder permission denied.');
   const album = project.title || 'Album';

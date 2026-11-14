@@ -11,7 +11,7 @@ export function planSync(projects, syncMap, deviceDirs) {
   const on = (projects || []).filter((p) => syncMap?.[p.id]?.on);
   const keep = new Set(on.map((p) => sanitizeFilename(p.title || 'Album')));
   const toWrite = on.filter((p) =>
-    (p.tracks || []).some((t) => t.clipId) &&
+    (p.tracks || []).some((tk) => tk.clipId) &&
     (!dirNames.has(sanitizeFilename(p.title || 'Album')) || (p.updatedAt || 0) > (syncMap[p.id].at || 0)));
   const toRemove = (deviceDirs || []).filter((d) => d.hasM3u && !keep.has(d.name)).map((d) => d.name);
   return { toWrite, toRemove };

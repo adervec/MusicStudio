@@ -12,6 +12,6 @@ export const THEMES = {
 };
 
 export function applyTheme(key) {
-  const t = THEMES[key] || THEMES.default;
-  for (const [k, v] of Object.entries(t.vars)) document.documentElement.style.setProperty(k, v);
+  const tk = THEMES[key] || THEMES.default;
+  for (const [k, v] of Object.entries(tk.vars)) document.documentElement.style.setProperty(k, v);
 }

@@ -22,14 +22,14 @@ function descendantGroupIds(gid, groups) {
 // that have audio (clipId) are playable, so those are what we return.
 export function resolvePlaylist(pl, projects = [], groups = []) {
   if (!pl) return [];
-  const decorate = (t, p) => ({ ...t, _album: p.title || '', _projectId: p.id });
+  const decorate = (tk, p) => ({ ...tk, _album: p.title || '', _projectId: p.id });
   if (pl.kind === 'static') {
     const byId = new Map(projects.map((p) => [p.id, p]));
     const out = [];
     for (const it of pl.items || []) {
       const p = byId.get(it.projectId); if (!p) continue;
-      const t = (p.tracks || []).find((x) => x.id === it.trackId);
-      if (t && t.clipId) out.push(decorate(t, p));
+      const tk = (p.tracks || []).find((x) => x.id === it.trackId);
+      if (tk && tk.clipId) out.push(decorate(tk, p));
     }
     return out;
   }
@@ -37,15 +37,15 @@ export function resolvePlaylist(pl, projects = [], groups = []) {
   const v = rule.value ?? '';
   const lc = String(v).toLowerCase();
   const flat = [];
-  for (const p of projects) for (const t of p.tracks || []) if (t.clipId) flat.push([t, p]);
+  for (const p of projects) for (const tk of p.tracks || []) if (tk.clipId) flat.push([tk, p]);
   let items = flat;
-  if (rule.field === 'favorites') items = flat.filter(([t]) => t.fav);
+  if (rule.field === 'favorites') items = flat.filter(([tk]) => tk.fav);
   else if (rule.field === 'group') { const ids = descendantGroupIds(v, groups); items = flat.filter(([, p]) => ids.has(p.parentId)); }
-  else if (rule.field === 'type') items = flat.filter(([t]) => t.type === v);
+  else if (rule.field === 'type') items = flat.filter(([tk]) => tk.type === v);
   else if (rule.field === 'genre') items = flat.filter(([, p]) => (p.meta?.genre || '').toLowerCase().includes(lc));
-  else if (rule.field === 'rating') items = flat.filter(([t]) => (t.rating || 0) >= (+v || 4)).sort(([a], [b]) => (b.rating || 0) - (a.rating || 0));
-  else if (rule.field === 'search') items = flat.filter(([t]) => `${t.title || ''} ${t.prompt || ''} ${t.text || ''}`.toLowerCase().includes(lc));
-  return items.map(([t, p]) => decorate(t, p));
+  else if (rule.field === 'rating') items = flat.filter(([tk]) => (tk.rating || 0) >= (+v || 4)).sort(([a], [b]) => (b.rating || 0) - (a.rating || 0));
+  else if (rule.field === 'search') items = flat.filter(([tk]) => `${tk.title || ''} ${tk.prompt || ''} ${tk.text || ''}`.toLowerCase().includes(lc));
+  return items.map(([tk, p]) => decorate(tk, p));
 }
 
 export function ruleLabel(pl, groups = []) {

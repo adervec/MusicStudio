@@ -70,17 +70,17 @@ export async function unzip(bytes) {
 
 // The JSON body for /v1/music(/detailed) from a track + options. A plan (v2/v2.5 `chunks`) replaces
 // the prompt; music_v1 can't take a v2 plan.
-export function composeBody(t, { model, seed, phonetic = false, c2pa = false, finetuneId = '', finetuneStrength = 1, storeForInpainting = true, withTimestamps = true, plan = null } = {}) {
-  const usePlan = plan || (t.usePlan && t.plan?.chunks?.length ? t.plan : null);
-  const body = { model_id: model, force_instrumental: !!t.instrumental, use_phonetic_names: !!phonetic, sign_with_c2pa: !!c2pa, store_for_inpainting: !!storeForInpainting, with_timestamps: !!withTimestamps };
+export function composeBody(tk, { model, seed, phonetic = false, c2pa = false, finetuneId = '', finetuneStrength = 1, storeForInpainting = true, withTimestamps = true, plan = null } = {}) {
+  const usePlan = plan || (tk.usePlan && tk.plan?.chunks?.length ? tk.plan : null);
+  const body = { model_id: model, force_instrumental: !!tk.instrumental, use_phonetic_names: !!phonetic, sign_with_c2pa: !!c2pa, store_for_inpainting: !!storeForInpainting, with_timestamps: !!withTimestamps };
   if (usePlan) {
     if (model === 'music_v1') throw new Error('Composition plans need Music v2 or newer — unpin Music v1 for this track.');
     body.composition_plan = { chunks: usePlan.chunks.map(cleanChunk) };
-    body.respect_sections_durations = t.respectDurations !== false;
+    body.respect_sections_durations = tk.respectDurations !== false;
   } else {
-    body.prompt = (t.prompt || '').trim();
-    body.music_length_ms = Math.max(3000, Math.min(600000, Math.round(t.lengthMs || 60000)));
-    if ((t.lyrics || '').trim() && !t.instrumental) body.lyrics_text = t.lyrics.trim();
+    body.prompt = (tk.prompt || '').trim();
+    body.music_length_ms = Math.max(3000, Math.min(600000, Math.round(tk.lengthMs || 60000)));
+    if ((tk.lyrics || '').trim() && !tk.instrumental) body.lyrics_text = tk.lyrics.trim();
   }
   if (Number.isInteger(seed)) body.seed = seed;
   if (finetuneId) { body.finetune_id = finetuneId; body.finetune_strength = Math.max(0, Math.min(2, +finetuneStrength || 1)); }
@@ -223,7 +223,7 @@ export async function videoToMusic({ videos, description = '', tags = [], model,
   const fd = new FormData();
   for (const v of videos) fd.append('videos', v, v.name || 'video.mp4');
   if (description.trim()) fd.append('description', description.trim().slice(0, 4100));
-  for (const t of tags.slice(0, 10)) fd.append('tags', t);
+  for (const tk of tags.slice(0, 10)) fd.append('tags', tk);
   fd.append('model_id', model); fd.append('add_sfx', addSfx ? 'true' : 'false'); fd.append('use_audio_as_reference', useAudioRef ? 'true' : 'false');
   const r = await fetch(`${BASE}/music/video-to-music?output_format=mp3_44100_128`, { method: 'POST', headers: hdr(apiKey, false), body: fd });
   if (!r.ok) throw await fail(r);
@@ -247,7 +247,7 @@ export async function listFinetunes(apiKey) {
 export async function createFinetune({ name, genre, files, tags = [], model }, apiKey) {
   const fd = new FormData();
   fd.append('name', name); fd.append('primary_genre', genre || 'other'); fd.append('model_id', model); fd.append('visibility', 'private');
-  for (const t of tags) fd.append('tags', t);
+  for (const tk of tags) fd.append('tags', tk);
   for (const f of files.slice(0, 50)) fd.append('files', f.blob, f.name);
   const r = await fetch(`${BASE}/music/finetunes`, { method: 'POST', headers: hdr(apiKey, false), body: fd });
   if (!r.ok) throw await fail(r);

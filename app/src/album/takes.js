@@ -12,28 +12,28 @@ export function takeToRep(k) {
   return { ...o, repId: k.id, genAt: k.at || 0, genMeta: k.meta || null, genPlan: k.plan || null, genModel: k.model || null, takeNote: k.note || '' };
 }
 // the track's current audio → a take (so choosing another take never loses it).
-export function repAsTake(t) {
-  const o = {}; for (const f of AUDIO) o[f] = t[f] ?? null;
-  return { ...o, id: t.repId || `k_${(t.clipId || '').slice(-8)}`, at: t.genAt || 0, meta: t.genMeta || null, plan: t.genPlan || null, model: t.genModel || null, note: t.takeNote || '' };
+export function repAsTake(tk) {
+  const o = {}; for (const f of AUDIO) o[f] = tk[f] ?? null;
+  return { ...o, id: tk.repId || `k_${(tk.clipId || '').slice(-8)}`, at: tk.genAt || 0, meta: tk.genMeta || null, plan: tk.genPlan || null, model: tk.genModel || null, note: tk.takeNote || '' };
 }
 // Make take `takeId` the track's audio; the old audio becomes a take in its place.
-export function chooseTake(t, takeId) {
-  const k = (t.takes || []).find((x) => x.id === takeId); if (!k) return t;
-  return { ...t, ...takeToRep(k), takes: (t.takes || []).map((x) => (x.id === takeId ? repAsTake(t) : x)).filter((x) => x.clipId) };
+export function chooseTake(tk, takeId) {
+  const k = (tk.takes || []).find((x) => x.id === takeId); if (!k) return tk;
+  return { ...tk, ...takeToRep(k), takes: (tk.takes || []).map((x) => (x.id === takeId ? repAsTake(tk) : x)).filter((x) => x.clipId) };
 }
 // Spend estimate for a set of tracks about to be queued.
 export function estimateJobs(tracks, { takes = 1, model = () => '', kind = '' } = {}) {
   let usd = 0, ms = 0, n = 0; const lines = [];
-  for (const t of tracks) {
-    if (kind === 'stems') { n++; lines.push({ title: t.title, detail: 'stem separation · credits (price unpublished)' }); continue; }
-    if (kind === 'video') { n++; lines.push({ title: t.title, detail: `score ${t.videoCount || 1} video clip(s) · credits by length` }); continue; }
-    if (t.type === 'sfx') { n++; lines.push({ title: t.title, detail: `sound effect${t.sfxDuration ? ` · ${t.sfxDuration}s` : ''} · credits` }); continue; }
-    if (t.type === 'music') {
-      const k = Math.max(1, Math.min(4, t.takesN || takes)), len = t.usePlan && t.plan?.chunks?.length ? planMs(t.plan) : (t.lengthMs || 60000);
+  for (const tk of tracks) {
+    if (kind === 'stems') { n++; lines.push({ title: tk.title, detail: 'stem separation · credits (price unpublished)' }); continue; }
+    if (kind === 'video') { n++; lines.push({ title: tk.title, detail: `score ${tk.videoCount || 1} video clip(s) · credits by length` }); continue; }
+    if (tk.type === 'sfx') { n++; lines.push({ title: tk.title, detail: `sound effect${tk.sfxDuration ? ` · ${tk.sfxDuration}s` : ''} · credits` }); continue; }
+    if (tk.type === 'music') {
+      const k = Math.max(1, Math.min(4, tk.takesN || takes)), len = tk.usePlan && tk.plan?.chunks?.length ? planMs(tk.plan) : (tk.lengthMs || 60000);
       usd += musicCost(len) * k; ms += len * k; n += k;
-      lines.push({ title: t.title, detail: `${k} take${k > 1 ? 's' : ''} × ${Math.round(len / 1000)}s · ${model(t)}${t.usePlan ? ' · plan' : ''}` });
-    } else if (t.type === 'dialog') { const c = (t.text || '').trim().length; usd += ttsCost(c); n++; lines.push({ title: t.title, detail: `${c} chars · ${t.ttsModel || 'tts'}` }); }
-    else { n++; lines.push({ title: t.title, detail: t.type }); }
+      lines.push({ title: tk.title, detail: `${k} take${k > 1 ? 's' : ''} × ${Math.round(len / 1000)}s · ${model(tk)}${tk.usePlan ? ' · plan' : ''}` });
+    } else if (tk.type === 'dialog') { const c = (tk.text || '').trim().length; usd += ttsCost(c); n++; lines.push({ title: tk.title, detail: `${c} chars · ${tk.ttsModel || 'tts'}` }); }
+    else { n++; lines.push({ title: tk.title, detail: tk.type }); }
   }
   return { usd, ms, count: n, lines };
 }

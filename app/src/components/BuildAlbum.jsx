@@ -29,12 +29,12 @@ export default function BuildAlbum({ groups, busy, onCreate, onClose }) {
   const [rows, setRows] = useState([]);
   const [album, setAlbum] = useState({ title: '', group: '', description: '' });
   const paths = useMemo(() => groups.map((g) => groupFolderPath(g, groups)).sort(), [groups]);
-  const prompts = useMemo(() => [...parsePromptBlob(paste), ...texts.flatMap((t) => promptsFromText(t.name, t.text, parsePromptBlob))], [paste, texts]);
+  const prompts = useMemo(() => [...parsePromptBlob(paste), ...texts.flatMap((tk) => promptsFromText(tk.name, tk.text, parsePromptBlob))], [paste, texts]);
 
   async function add(folder) {
     const files = folder ? await pickFiles(true) : await pickFile('audio/*,.txt,.md'); if (!files.length) return;
-    const t = await Promise.all(files.filter((f) => TEXT_RE.test(f.name)).map(async (f) => ({ name: f.name, text: await f.text() })));
-    setTexts((x) => [...x, ...t]);
+    const tk = await Promise.all(files.filter((f) => TEXT_RE.test(f.name)).map(async (f) => ({ name: f.name, text: await f.text() })));
+    setTexts((x) => [...x, ...tk]);
     setAudio((x) => [...x, ...files.filter((f) => AUDIO_RE.test(f.name) && !x.some((y) => y.name === f.name && y.size === f.size))]);
     const dirName = folder && files[0]?.webkitRelativePath?.split('/')[0];
     if (dirName) setAlbum((a) => (a.title ? a : { ...a, title: dirName }));
@@ -71,7 +71,7 @@ export default function BuildAlbum({ groups, busy, onCreate, onClose }) {
           </div>
           {(audio.length > 0 || texts.length > 0) && (
             <div className="wiz-list" style={{ maxHeight: 160, fontSize: 12, marginTop: 8 }}>
-              {texts.map((t, i) => <div key={'t' + i}>📝 {t.name} <button className="mini" onClick={() => setTexts((x) => x.filter((_, j) => j !== i))}>✕</button></div>)}
+              {texts.map((tk, i) => <div key={'t' + i}>📝 {tk.name} <button className="mini" onClick={() => setTexts((x) => x.filter((_, j) => j !== i))}>✕</button></div>)}
               {audio.map((f, i) => <div key={'a' + i}>🎵 {f.name} <span className="dim">{(f.size / 1048576).toFixed(1)} MB</span> <button className="mini" onClick={() => setAudio((x) => x.filter((_, j) => j !== i))}>✕</button></div>)}
             </div>
           )}

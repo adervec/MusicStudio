@@ -39,7 +39,7 @@ export default function Sidebar({ groups, projects, playlists, activeId, activeG
   }
 
   function Album({ a, depth }) {
-    const dur = (a.tracks || []).reduce((s, t) => s + (t.clipId ? t.durationMs || 0 : 0), 0);
+    const dur = (a.tracks || []).reduce((s, tk) => s + (tk.clipId ? tk.durationMs || 0 : 0), 0);
     const g = albumGaps(a); const d = duplicateIds(a.tracks).size;
     return (
       <div className={`proj ${activeId === a.id ? 'active' : ''}`} style={{ marginLeft: depth * 14 }} onClick={() => onOpen(a.id)}>
