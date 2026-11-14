@@ -21,6 +21,20 @@ function kindOf(name, mime) {
   if (mime.startsWith('text/') || TEXT_RE.test(name)) return 'text';
   return 'other';
 }
+// A Markdown note as its own little page, styled like the app. It lives in a sandboxed frame with no
+// scripts, so even a hostile note can't touch the app (house standard 22); same-origin only so the
+// frame can be sized to its content.
+function mdDoc(md) {
+  const cs = getComputedStyle(document.documentElement), v = (n) => cs.getPropertyValue(n).trim();
+  const font = getComputedStyle(document.body).fontFamily;
+  const css = `body{margin:0;padding:16px 24px;font:14px/1.65 ${font};color:${v('--text')};background:${v('--bg')}}
+h1,h2,h3,h4{margin:1.1em 0 .4em;line-height:1.25}h1{font-size:1.6em;border-bottom:1px solid ${v('--line')};padding-bottom:.3em;margin-top:.2em}
+h2{font-size:1.3em;border-bottom:1px solid ${v('--line')};padding-bottom:.2em}h3{font-size:1.1em}p,ul,ol{margin:.55em 0}li{margin:.2em 0}
+code{background:${v('--panel2')};padding:1px 5px;border-radius:4px;font-size:.9em}pre{background:${v('--panel')};border:1px solid ${v('--line')};padding:10px 12px;border-radius:8px;overflow:auto}
+pre code{background:none;padding:0}blockquote{margin:.6em 0;padding:.2em 12px;border-inline-start:3px solid ${v('--accent')};color:${v('--dim')};background:${v('--panel2')}}
+hr{border:0;border-top:1px solid ${v('--line')};margin:1.2em 0}a{color:${v('--accent')}}`;
+  return `<!doctype html><html dir="${document.documentElement.dir || 'ltr'}"><head><meta charset="utf-8"><style>${css}</style></head><body>${renderMarkdown(md)}</body></html>`;
+}
 const HAS_SOURCE = new Set(['html', 'md', 'json', 'csv', 'svg']);
 
 // Inline preview of one album attachment, styled the way the file means to look: HTML renders as a
@@ -54,7 +68,8 @@ export default function AttachmentPreview({ a }) {
   let body;
   if (showSource) body = <pre className="att-body att-code">{text}</pre>;
   else if (kind === 'html') body = <iframe className="att-body att-frame" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms" srcDoc={text} title={a.name} />;
-  else if (kind === 'md') body = <div className="att-body att-md" dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }} />; // escaped by renderMarkdown
+  else if (kind === 'md') body = <iframe className="att-body att-md-frame" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" srcDoc={mdDoc(text)} title={a.name}
+    onLoad={(e) => { const d = e.currentTarget.contentDocument; if (d) e.currentTarget.style.height = Math.min(560, d.documentElement.scrollHeight + 4) + 'px'; }} />;
   else if (kind === 'json') {
     let pretty = text; try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch { /* show as-is */ }
     body = <pre className="att-body att-code">{pretty}</pre>;

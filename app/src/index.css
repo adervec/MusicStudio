@@ -214,3 +214,5 @@ th, td { text-align: start; padding: 5px 8px; border-bottom: 1px solid var(--lin
 /* RTL: start-edge accent bars sit on the right */
 [dir=rtl] .queue-row.now { box-shadow: inset -3px 0 0 var(--accent); }
 [dir=rtl] .take-row.now { box-shadow: inset -3px 0 0 var(--accent); }
+
+.att-md-frame { display: block; width: 100%; height: 200px; border: 0; background: var(--bg); }

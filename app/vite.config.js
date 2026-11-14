@@ -28,4 +28,12 @@ function openFolderPlugin() {
   };
 }
 
-export default defineConfig({ plugins: [react(), openFolderPlugin()] });
+// The dev server needs its live-reload websocket; the built site keeps the strict policy from index.html.
+function devCsp() {
+  return {
+    name: 'dev-csp', apply: 'serve',
+    transformIndexHtml: (html) => html.replace("connect-src 'self'", "connect-src 'self' ws://localhost:* ws://127.0.0.1:*"),
+  };
+}
+
+export default defineConfig({ plugins: [react(), openFolderPlugin(), devCsp()] });

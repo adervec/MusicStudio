@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#14161a" />
+    <!-- house standard 22: only this site, adervec.github.io, ElevenLabs and Google sign-in/Drive.
+         'unsafe-inline' scripts: an HTML attachment preview (sandboxed frame, no access to the app) inherits
+         this policy and needs its own inline scripts to stay interactive. Dev server relaxes it (vite.config). -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://adervec.github.io https://accounts.google.com; style-src 'self' 'unsafe-inline' https://adervec.github.io https://accounts.google.com; img-src 'self' blob: data: https://*.googleusercontent.com; media-src 'self' blob:; connect-src 'self' https://adervec.github.io https://api.elevenlabs.io https://www.googleapis.com https://accounts.google.com https://oauth2.googleapis.com; frame-src 'self' blob: https://accounts.google.com; font-src 'self' https://adervec.github.io; manifest-src 'self'; worker-src 'self'; form-action 'none'; base-uri 'none'; object-src 'none'">
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <title>Music Studio</title>
